@@ -34,6 +34,8 @@ The first version produces a fluid desktop layout. Elementor tablet/mobile overr
 
 The plugin now includes a **Figma Import** admin page for the WordPress-native product roadmap. It reports Elementor compatibility and the future connection/import workflow without accepting a Figma personal token or changing site content. Figma OAuth connection requires the separately deployed, security-reviewed OAuth broker described in [Product Discovery](docs/product-discovery.md).
 
+The broker reference is in [oauth-broker](oauth-broker/README.md). It is not a converter or a Node dependency; it only keeps Figma's confidential OAuth client secret outside the distributed plugin and passes a short-lived authorization handoff back to WordPress.
+
 ## 1. Install the WordPress bridge
 
 1. Upload `elementor-mcp-bridge.zip` in **Plugins → Add New → Upload Plugin**.
