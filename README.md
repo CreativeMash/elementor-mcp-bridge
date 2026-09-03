@@ -130,6 +130,10 @@ npm run check
 
 The TypeScript compiler and converter tests run without access to Figma or WordPress. Live API testing requires credentials in `.env`.
 
+## Product roadmap
+
+The developer-oriented MCP workflow is the current MVP. The planned user-facing product, onboarding flow, import-plan review, style-token mapping, and safety requirements are documented in [Product Discovery](docs/product-discovery.md).
+
 ## Security choices
 
 - Credentials are read only from environment variables or local `.env`.
@@ -139,4 +143,3 @@ The TypeScript compiler and converter tests run without access to Figma or WordP
 - A WordPress revision is saved before replacing Elementor data.
 - Media import requires HTTPS and WordPress's safe download handling.
 - The bridge limits Elementor JSON payloads to 10 MB.
-
