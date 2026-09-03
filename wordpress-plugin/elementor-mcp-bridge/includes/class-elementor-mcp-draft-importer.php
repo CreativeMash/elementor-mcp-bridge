@@ -47,9 +47,19 @@ final class Elementor_MCP_Draft_Importer {
 		return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'container', 'isInner' => true, 'settings' => array_merge( self::visual( $node ), $positioning, array( 'content_width' => 'full', 'flex_direction' => 'HORIZONTAL' === $layout_mode ? 'row' : 'column', 'flex_justify_content' => $justify[ $node['primaryAxisAlignItems'] ?? '' ] ?? 'flex-start', 'flex_align_items' => $align[ $node['counterAxisAlignItems'] ?? '' ] ?? 'stretch', 'flex_gap' => isset( $node['itemSpacing'] ) ? array( 'column' => (string) $node['itemSpacing'], 'row' => (string) $node['itemSpacing'], 'isLinked' => true, 'unit' => 'px', 'size' => (float) $node['itemSpacing'] ) : null, 'padding' => self::box( $node['paddingTop'] ?? 0, $node['paddingRight'] ?? 0, $node['paddingBottom'] ?? 0, $node['paddingLeft'] ?? 0 ), 'width' => $width, 'min_height' => $height ), $native_alignment ), 'elements' => $children );
 	}
 	private static function positioning( array $node, ?array $parent, bool $is_root ): array {
-		if ( $is_root || ! $parent || 'NONE' !== ( $parent['layoutMode'] ?? 'NONE' ) ) return array();
-		$box = $node['absoluteBoundingBox'] ?? array(); $parent_box = $parent['absoluteBoundingBox'] ?? array();
-		if ( ! isset( $box['x'], $box['y'], $box['width'], $box['height'], $parent_box['x'], $parent_box['y'] ) ) return array();
+		if ( $is_root || ! $parent ) return array();
+		$box = $node['absoluteBoundingBox'] ?? array();
+		if ( ! isset( $box['width'], $box['height'] ) ) return array();
+		$parent_layout = $parent['layoutMode'] ?? 'NONE';
+		$parent_space_between = 'HORIZONTAL' === $parent_layout && 'SPACE_BETWEEN' === ( $parent['primaryAxisAlignItems'] ?? '' );
+		if ( 'NONE' !== $parent_layout ) {
+			// Space-between needs real endpoint widths; Elementor otherwise lets both children grow.
+			if ( ! $parent_space_between ) return array();
+			if ( 'TEXT' === ( $node['type'] ?? '' ) ) return array( '_element_width' => 'initial', '_element_custom_width' => self::size( $box['width'] ) );
+			return array( 'width' => self::size( $box['width'] ) );
+		}
+		$parent_box = $parent['absoluteBoundingBox'] ?? array();
+		if ( ! isset( $box['x'], $box['y'], $parent_box['x'], $parent_box['y'] ) ) return array();
 		$x = (float) $box['x'] - (float) $parent_box['x']; $y = (float) $box['y'] - (float) $parent_box['y'];
 		if ( 'TEXT' === ( $node['type'] ?? '' ) ) return array( '_position' => 'absolute', '_offset_orientation_h' => 'start', '_offset_x' => self::size( $x ), '_offset_orientation_v' => 'start', '_offset_y' => self::size( $y ), '_element_width' => 'initial', '_element_custom_width' => self::size( $box['width'] ) );
 		return array( 'position' => 'absolute', '_offset_orientation_h' => 'start', '_offset_x' => self::size( $x ), '_offset_orientation_v' => 'start', '_offset_y' => self::size( $y ), 'width' => self::size( $box['width'] ), 'min_height' => self::size( $box['height'] ) );
