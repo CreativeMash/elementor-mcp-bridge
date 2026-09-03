@@ -49,6 +49,10 @@ final class Elementor_MCP_Admin {
 			.elementor-mcp-compatibility table { border-collapse: collapse; width: 100%; }
 			.elementor-mcp-compatibility td { border-top: 1px solid #edf0f4; padding: 12px 0; }
 			.elementor-mcp-compatibility td:last-child { text-align: right; }
+			.elementor-mcp-card input[type="url"] { box-sizing: border-box; margin: 12px 0; max-width: 100%; width: 100%; }
+			.elementor-mcp-preview { background: #f8fafc; border: 1px solid #d8dee9; border-radius: 10px; margin-top: 14px; padding: 12px; }
+			.elementor-mcp-preview h3 { font-size: 14px; margin: 0 0 8px; }
+			.elementor-mcp-preview p, .elementor-mcp-preview ul { font-size: 13px; margin: 8px 0; }
 			@media (max-width: 782px) { .elementor-mcp-grid { grid-template-columns: 1fr; } .elementor-mcp-hero { padding: 28px; } }
 		</style>
 		<?php
@@ -62,6 +66,7 @@ final class Elementor_MCP_Admin {
 		$elementor_ready = did_action( 'elementor/loaded' ) && defined( 'ELEMENTOR_VERSION' );
 		$broker_ready = Elementor_MCP_Figma_Connection::broker_ready();
 		$connection = Elementor_MCP_Figma_Connection::summary();
+		$preview = Elementor_MCP_Figma_Analyzer::preview();
 		?>
 		<div class="wrap elementor-mcp-wrap">
 			<?php self::render_notice(); ?>
@@ -80,8 +85,7 @@ final class Elementor_MCP_Admin {
 				<section class="elementor-mcp-card">
 					<div class="elementor-mcp-step"><?php esc_html_e( 'Step 2', 'elementor-mcp-bridge' ); ?></div>
 					<h2><?php esc_html_e( 'Analyze a frame', 'elementor-mcp-bridge' ); ?></h2>
-					<?php self::state_badge( ! empty( $connection ) && empty( $connection['expired'] ), __( 'Connection ready', 'elementor-mcp-bridge' ), __( 'Available after connection', 'elementor-mcp-bridge' ) ); ?>
-					<p><?php esc_html_e( 'Paste a Figma frame URL. We will show containers, styles, assets, components, conflicts, and unsupported details before importing.', 'elementor-mcp-bridge' ); ?></p>
+					<?php self::analysis_card( $connection, $preview ); ?>
 				</section>
 
 				<section class="elementor-mcp-card">
@@ -164,6 +168,45 @@ final class Elementor_MCP_Admin {
 		self::state_badge( false, '', $connection ? __( 'Connection expired', 'elementor-mcp-bridge' ) : __( 'Ready to connect', 'elementor-mcp-bridge' ) );
 	}
 
+	private static function analysis_card( ?array $connection, ?array $preview ): void {
+		if ( ! $connection || ! empty( $connection['expired'] ) ) {
+			self::state_badge( false, '', __( 'Available after connection', 'elementor-mcp-bridge' ) );
+			echo '<p>' . esc_html__( 'Connect Figma first. Analysis is read-only and never changes WordPress content.', 'elementor-mcp-bridge' ) . '</p>';
+			return;
+		}
+
+		self::state_badge( true, __( 'Connection ready', 'elementor-mcp-bridge' ), '' );
+		?>
+		<p><?php esc_html_e( 'Paste a Figma frame URL to preview its conversion. Nothing will be imported at this step.', 'elementor-mcp-bridge' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="elementor_mcp_analyze_figma">
+			<?php wp_nonce_field( 'elementor_mcp_analyze_figma' ); ?>
+			<label for="elementor-mcp-figma-url" class="screen-reader-text"><?php esc_html_e( 'Figma frame URL', 'elementor-mcp-bridge' ); ?></label>
+			<input id="elementor-mcp-figma-url" name="figma_url" type="url" required placeholder="https://www.figma.com/design/...?...node-id=..." value="<?php echo esc_attr( $preview['source']['url'] ?? '' ); ?>">
+			<button type="submit" class="button button-primary"><?php esc_html_e( 'Analyze frame', 'elementor-mcp-bridge' ); ?></button>
+		</form>
+		<?php self::render_preview( $preview ); ?>
+		<?php
+	}
+
+	private static function render_preview( ?array $preview ): void {
+		if ( ! $preview ) {
+			return;
+		}
+		$source = is_array( $preview['source'] ?? null ) ? $preview['source'] : array();
+		$stats = is_array( $preview['stats'] ?? null ) ? $preview['stats'] : array();
+		$warnings = is_array( $preview['warnings'] ?? null ) ? $preview['warnings'] : array();
+		?>
+		<div class="elementor-mcp-preview">
+			<h3><?php echo esc_html( sprintf( __( 'Preview: %s', 'elementor-mcp-bridge' ), $source['name'] ?? __( 'Figma frame', 'elementor-mcp-bridge' ) ) ); ?></h3>
+			<p><?php echo esc_html( sprintf( __( '%1$d containers, %2$d text layers, %3$d image/vector layers, %4$d components.', 'elementor-mcp-bridge' ), absint( $stats['containers'] ?? 0 ), absint( $stats['text'] ?? 0 ), absint( $stats['images'] ?? 0 ), absint( $stats['components'] ?? 0 ) ) ); ?></p>
+			<?php if ( $warnings ) : ?>
+				<ul><?php foreach ( $warnings as $warning ) : ?><li><?php echo esc_html( $warning ); ?></li><?php endforeach; ?></ul>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
 	private static function render_notice(): void {
 		$notice = isset( $_GET['elementor_mcp_notice'] ) ? sanitize_key( wp_unslash( $_GET['elementor_mcp_notice'] ) ) : '';
 		$messages = array(
@@ -171,6 +214,8 @@ final class Elementor_MCP_Admin {
 			'connection-failed'              => array( 'error', __( 'Figma could not be connected. No authorization data was saved; please try again or contact the site administrator.', 'elementor-mcp-bridge' ) ),
 			'connection-complete'            => array( 'success', __( 'Figma is connected for your WordPress user.', 'elementor-mcp-bridge' ) ),
 			'disconnected'                    => array( 'success', __( 'The saved Figma authorization has been removed from this WordPress user.', 'elementor-mcp-bridge' ) ),
+			'analysis-complete'               => array( 'success', __( 'Figma frame analysis is ready to review. No WordPress content was changed.', 'elementor-mcp-bridge' ) ),
+			'analysis-failed'                 => array( 'error', __( 'The Figma frame could not be analyzed. Check the selected frame URL and ensure it is shared with the connected Figma user.', 'elementor-mcp-bridge' ) ),
 		);
 		if ( ! isset( $messages[ $notice ] ) ) {
 			return;

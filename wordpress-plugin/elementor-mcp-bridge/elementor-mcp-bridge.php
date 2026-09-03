@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 if ( is_admin() ) {
 	require_once __DIR__ . '/includes/class-elementor-mcp-figma-connection.php';
+	require_once __DIR__ . '/includes/class-elementor-mcp-figma-analyzer.php';
 	require_once __DIR__ . '/includes/class-elementor-mcp-admin.php';
 }
 
@@ -253,4 +254,8 @@ if ( is_admin() && class_exists( 'Elementor_MCP_Admin' ) ) {
 
 if ( is_admin() && class_exists( 'Elementor_MCP_Figma_Connection' ) ) {
 	Elementor_MCP_Figma_Connection::init();
+}
+
+if ( is_admin() && class_exists( 'Elementor_MCP_Figma_Analyzer' ) ) {
+	Elementor_MCP_Figma_Analyzer::init();
 }

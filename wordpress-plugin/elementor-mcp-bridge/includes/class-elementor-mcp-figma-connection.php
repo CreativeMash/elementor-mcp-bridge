@@ -50,6 +50,17 @@ final class Elementor_MCP_Figma_Connection {
 		);
 	}
 
+	/**
+	 * Server-side use only. This value must never be rendered or returned by a REST endpoint.
+	 */
+	public static function access_token(): ?string {
+		$connection = self::connection();
+		if ( ! $connection || ( ! empty( $connection['expires_at'] ) && absint( $connection['expires_at'] ) <= time() ) ) {
+			return null;
+		}
+		return is_string( $connection['access_token'] ?? null ) ? $connection['access_token'] : null;
+	}
+
 	public static function start_oauth(): void {
 		self::require_admin();
 		check_admin_referer( 'elementor_mcp_start_oauth' );
