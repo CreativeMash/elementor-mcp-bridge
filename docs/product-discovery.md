@@ -60,11 +60,13 @@ The plugin already runs inside the target WordPress site, so users should not en
 
 Local-development sites must present a certificate trusted by the conversion runtime. The product must not require users to disable TLS verification to connect to a local WordPress instance; onboarding should detect an untrusted certificate and explain how to trust or replace it.
 
-### Hosted Conversion Service
+### WordPress-Native Conversion
 
-The current TypeScript converter requires Node.js and should not be a requirement for WordPress users. The preferred production model is a hosted conversion service paired with the WordPress plugin. The plugin and service need a short-lived, revocable authorization handshake rather than a user-managed WordPress application password.
+**Decision: the production converter runs inside the WordPress plugin.** Users must not install Node.js, run a companion service, configure `.env`, provide a WordPress URL, or create an application password.
 
-Before committing to this model, validate hosting cost, data retention, Figma OAuth scopes, WordPress-to-service authentication, and privacy requirements. A WordPress-only PHP converter remains an alternative if a hosted service is not acceptable.
+The current TypeScript MCP server is a developer prototype and a behavioral reference while the converter is ported into the plugin. The production plugin will use WordPress's HTTP API for Figma requests, store the minimum required Figma authorization data securely, and perform analysis, preview, and Elementor JSON generation in PHP.
+
+Before implementation, validate Figma OAuth scopes, token storage and revocation, WordPress HTTP API limits/timeouts, long-running conversion handling, and the practical size limits for Figma files. A hosted service is not part of the user-facing product architecture.
 
 ## Safety Requirements
 
@@ -98,14 +100,13 @@ Before committing to this model, validate hosting cost, data retention, Figma OA
 
 ## Decisions to Validate Before Implementation
 
-1. Hosted service versus a WordPress-only converter.
-2. Figma OAuth application ownership, scopes, and token retention.
-3. The WordPress authorization protocol used by the hosted service.
-4. Which Elementor 4 variables and global-class APIs are stable enough to write.
-5. How active-Kit revisions or snapshots are created and restored.
-6. The first component recipes to support, such as headings, buttons, cards, and images.
-7. The preview format: structured import plan first, visual comparison later.
+1. Figma OAuth application ownership, scopes, token retention, and revocation.
+2. WordPress HTTP API limits, retries, and timeouts for Figma file reads.
+3. Which Elementor 4 variables and global-class APIs are stable enough to write.
+4. How active-Kit revisions or snapshots are created and restored.
+5. The first component recipes to support, such as headings, buttons, cards, and images.
+6. The preview format: structured import plan first, visual comparison later.
 
 ## First Engineering Milestone
 
-Implement `figma_preview_style_guide` as a read-only MCP tool backed by the import-plan engine. It should fetch the Figma frame's available styles and variables, read the current Elementor global context, and return proposed mappings, conflicts, and unsupported items. It must not write to WordPress.
+Port the import-plan engine into the WordPress plugin, beginning with a read-only Figma style-guide preview. It should fetch the Figma frame's available styles and variables through WordPress, read the current Elementor global context, and return proposed mappings, conflicts, and unsupported items. It must not write to WordPress.
