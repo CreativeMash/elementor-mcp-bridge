@@ -10,31 +10,34 @@ final class Elementor_MCP_Draft_Importer {
 		check_admin_referer( 'elementor_mcp_create_draft' );
 		$preview = Elementor_MCP_Figma_Analyzer::preview();
 		if ( ! $preview || empty( $preview['document'] ) || true !== (bool) ( $_POST['confirm_draft'] ?? false ) || ! did_action( 'elementor/loaded' ) ) { self::redirect( 'draft-failed' ); }
-		$content = self::convert( $preview['document'] );
-		if ( ! $content ) { self::redirect( 'draft-failed' ); }
 		$title = sanitize_text_field( $_POST['draft_title'] ?? ( $preview['source']['name'] ?? 'Figma import' ) );
 		$id = wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'draft', 'post_title' => $title ?: 'Figma import', 'post_author' => get_current_user_id() ), true );
 		if ( is_wp_error( $id ) ) { self::redirect( 'draft-failed' ); }
+		$assets = self::import_assets( $preview, (int) $id );
+		$content = self::convert( $preview['document'], $assets );
+		if ( ! $content ) { self::redirect( 'draft-failed' ); }
 		update_post_meta( $id, '_elementor_edit_mode', 'builder' ); update_post_meta( $id, '_elementor_template_type', 'wp-page' ); update_post_meta( $id, '_elementor_version', ELEMENTOR_VERSION );
-		update_post_meta( $id, '_elementor_data', wp_slash( wp_json_encode( array( self::convert_node( $preview['document'], null, true ) ) ) ) );
+		update_post_meta( $id, '_elementor_data', wp_slash( wp_json_encode( array( self::convert_node( $preview['document'], null, true, $assets ) ) ) ) );
 		update_post_meta( $id, '_wp_page_template', 'elementor_canvas' ); clean_post_cache( $id );
 		self::redirect( 'draft-created', array( 'draft_id' => $id ) );
 	}
 
-	private static function convert( array $node ): bool { return null !== self::convert_node( $node, null, true ); }
+	private static function convert( array $node, array $assets ): bool { return null !== self::convert_node( $node, null, true, $assets ); }
 	/**
 	 * Auto Layout maps to Elementor flexbox. A Figma parent without Auto Layout
 	 * retains its desktop coordinates using Elementor's native absolute controls.
 	 */
-	private static function convert_node( array $node, ?array $parent = null, bool $is_root = false ): ?array {
+	private static function convert_node( array $node, ?array $parent = null, bool $is_root = false, array $assets = array() ): ?array {
 		if ( false === ( $node['visible'] ?? true ) ) return null;
 		$layout_mode = $node['layoutMode'] ?? 'NONE';
-		$positioning = self::positioning( $node, $parent, $is_root );
+		$positioning = self::positioning( $node, $parent, $is_root, 'TEXT' === ( $node['type'] ?? '' ) );
+		$node_id = (string) ( $node['id'] ?? '' );
+		if ( isset( $assets[ $node_id ] ) && self::is_asset_node( $node ) ) return self::image_widget( $node, $parent, $is_root, (int) $assets[ $node_id ] );
 		if ( 'TEXT' === ( $node['type'] ?? '' ) ) {
 			$style = (array) ( $node['style'] ?? array() ); $size = (float) ( $style['fontSize'] ?? 16 ); $heading = $size >= 24;
 			return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'widget', 'widgetType' => $heading ? 'heading' : 'text-editor', 'settings' => array_merge( self::visual( $node ), $positioning, array( $heading ? 'title' : 'editor' => $node['characters'] ?? '', 'text_color' => self::color( $node['fills'] ?? array() ), 'typography_typography' => 'custom', 'typography_font_family' => $style['fontFamily'] ?? '', 'typography_font_weight' => (string) ( $style['fontWeight'] ?? 400 ), 'typography_font_size' => self::size( $size ), 'typography_line_height' => self::size( $style['lineHeightPx'] ?? null ), 'typography_letter_spacing' => self::size( $style['letterSpacing'] ?? null ) ) ), 'elements' => array() );
 		}
-		$children = array(); foreach ( (array) ( $node['children'] ?? array() ) as $child ) { if ( is_array( $child ) && ( $element = self::convert_node( $child, $node ) ) ) $children[] = $element; }
+		$children = array(); foreach ( (array) ( $node['children'] ?? array() ) as $child ) { if ( is_array( $child ) && ( $element = self::convert_node( $child, $node, false, $assets ) ) ) $children[] = $element; }
 		$justify = array( 'MIN' => 'flex-start', 'CENTER' => 'center', 'MAX' => 'flex-end', 'SPACE_BETWEEN' => 'space-between' ); $align = array( 'MIN' => 'flex-start', 'CENTER' => 'center', 'MAX' => 'flex-end', 'BASELINE' => 'baseline' );
 		$horizontal_size = $node['layoutSizingHorizontal'] ?? '';
 		$width = ( 1 === (int) ( $node['layoutGrow'] ?? 0 ) || 'FILL' === $horizontal_size ) ? array( 'unit' => '%', 'size' => 100, 'sizes' => array() ) : ( 'FIXED' === $horizontal_size ? self::size( $node['absoluteBoundingBox']['width'] ?? null ) : null );
@@ -46,7 +49,7 @@ final class Elementor_MCP_Draft_Importer {
 		$native_alignment = $space_between ? array( 'direction' => 'row', 'justify_content' => 'space-between' ) : array();
 		return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'container', 'isInner' => true, 'settings' => array_merge( self::visual( $node ), $positioning, array( 'content_width' => 'full', 'flex_direction' => 'HORIZONTAL' === $layout_mode ? 'row' : 'column', 'flex_justify_content' => $justify[ $node['primaryAxisAlignItems'] ?? '' ] ?? 'flex-start', 'flex_align_items' => $align[ $node['counterAxisAlignItems'] ?? '' ] ?? 'stretch', 'flex_gap' => isset( $node['itemSpacing'] ) ? array( 'column' => (string) $node['itemSpacing'], 'row' => (string) $node['itemSpacing'], 'isLinked' => true, 'unit' => 'px', 'size' => (float) $node['itemSpacing'] ) : null, 'padding' => self::box( $node['paddingTop'] ?? 0, $node['paddingRight'] ?? 0, $node['paddingBottom'] ?? 0, $node['paddingLeft'] ?? 0 ), 'width' => $width, 'min_height' => $height ), $native_alignment ), 'elements' => $children );
 	}
-	private static function positioning( array $node, ?array $parent, bool $is_root ): array {
+	private static function positioning( array $node, ?array $parent, bool $is_root, bool $is_widget = false ): array {
 		if ( $is_root || ! $parent ) return array();
 		$box = $node['absoluteBoundingBox'] ?? array();
 		if ( ! isset( $box['width'], $box['height'] ) ) return array();
@@ -55,15 +58,30 @@ final class Elementor_MCP_Draft_Importer {
 		if ( 'NONE' !== $parent_layout ) {
 			// Space-between needs real endpoint widths; Elementor otherwise lets both children grow.
 			if ( ! $parent_space_between ) return array();
-			if ( 'TEXT' === ( $node['type'] ?? '' ) ) return array( '_element_width' => 'initial', '_element_custom_width' => self::size( $box['width'] ) );
+			if ( $is_widget ) return array( '_element_width' => 'initial', '_element_custom_width' => self::size( $box['width'] ) );
 			return array( 'width' => self::size( $box['width'] ) );
 		}
 		$parent_box = $parent['absoluteBoundingBox'] ?? array();
 		if ( ! isset( $box['x'], $box['y'], $parent_box['x'], $parent_box['y'] ) ) return array();
 		$x = (float) $box['x'] - (float) $parent_box['x']; $y = (float) $box['y'] - (float) $parent_box['y'];
-		if ( 'TEXT' === ( $node['type'] ?? '' ) ) return array( '_position' => 'absolute', '_offset_orientation_h' => 'start', '_offset_x' => self::size( $x ), '_offset_orientation_v' => 'start', '_offset_y' => self::size( $y ), '_element_width' => 'initial', '_element_custom_width' => self::size( $box['width'] ) );
+		if ( $is_widget ) return array( '_position' => 'absolute', '_offset_orientation_h' => 'start', '_offset_x' => self::size( $x ), '_offset_orientation_v' => 'start', '_offset_y' => self::size( $y ), '_element_width' => 'initial', '_element_custom_width' => self::size( $box['width'] ) );
 		return array( 'position' => 'absolute', '_offset_orientation_h' => 'start', '_offset_x' => self::size( $x ), '_offset_orientation_v' => 'start', '_offset_y' => self::size( $y ), 'width' => self::size( $box['width'] ), 'min_height' => self::size( $box['height'] ) );
 	}
+	private static function is_asset_node( array $node ): bool { if ( in_array( $node['type'] ?? '', array( 'VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON' ), true ) ) return true; foreach ( (array) ( $node['fills'] ?? array() ) as $fill ) if ( is_array( $fill ) && 'IMAGE' === ( $fill['type'] ?? '' ) && false !== ( $fill['visible'] ?? true ) ) return true; return false; }
+	private static function image_widget( array $node, ?array $parent, bool $is_root, int $attachment_id ): array { return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'widget', 'widgetType' => 'image', 'settings' => array_merge( self::positioning( $node, $parent, $is_root, true ), array( 'image' => array( 'id' => $attachment_id, 'url' => wp_get_attachment_url( $attachment_id ) ), 'image_size' => 'full' ) ), 'elements' => array() ); }
+	private static function import_assets( array $preview, int $post_id ): array {
+		if ( ! current_user_can( 'upload_files' ) || empty( $preview['source']['file_key'] ) || ! ( $token = Elementor_MCP_Figma_Connection::access_token() ) ) return array();
+		$nodes = array(); self::collect_assets( $preview['document'] ?? array(), $nodes ); if ( ! $nodes ) return array();
+		$ids = array_keys( $nodes ); $attachments = array();
+		foreach ( array_chunk( $ids, 50 ) as $chunk ) {
+			$response = wp_remote_get( add_query_arg( array( 'ids' => implode( ',', $chunk ), 'format' => 'png', 'scale' => 1 ), 'https://api.figma.com/v1/images/' . rawurlencode( $preview['source']['file_key'] ) ), array( 'timeout' => 30, 'redirection' => 0, 'sslverify' => true, 'headers' => array( 'Authorization' => 'Bearer ' . $token ) ) );
+			$payload = ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ? json_decode( wp_remote_retrieve_body( $response ), true ) : array();
+			foreach ( (array) ( $payload['images'] ?? array() ) as $figma_id => $url ) { if ( is_string( $url ) && 'https' === wp_parse_url( $url, PHP_URL_SCHEME ) && ( $attachment = self::sideload_asset( $url, $preview['source']['file_key'], (string) $figma_id, $nodes[ $figma_id ] ?? 'Figma asset', $post_id ) ) ) $attachments[ $figma_id ] = $attachment; }
+		}
+		return $attachments;
+	}
+	private static function collect_assets( array $node, array &$assets ): void { if ( false === ( $node['visible'] ?? true ) ) return; if ( self::is_asset_node( $node ) && ! empty( $node['id'] ) ) $assets[ (string) $node['id'] ] = sanitize_text_field( (string) ( $node['name'] ?? 'Figma asset' ) ); foreach ( (array) ( $node['children'] ?? array() ) as $child ) if ( is_array( $child ) ) self::collect_assets( $child, $assets ); }
+	private static function sideload_asset( string $url, string $file_key, string $figma_id, string $name, int $post_id ): int { $source = sanitize_text_field( $file_key . ':' . $figma_id ); $existing = get_posts( array( 'post_type' => 'attachment', 'post_status' => 'inherit', 'posts_per_page' => 1, 'fields' => 'ids', 'meta_key' => '_elementor_mcp_figma_asset', 'meta_value' => $source ) ); if ( $existing ) return (int) $existing[0]; require_once ABSPATH . 'wp-admin/includes/file.php'; require_once ABSPATH . 'wp-admin/includes/media.php'; require_once ABSPATH . 'wp-admin/includes/image.php'; $temporary = download_url( $url, 30 ); if ( is_wp_error( $temporary ) ) return 0; $attachment = media_handle_sideload( array( 'name' => sanitize_file_name( $name ?: 'figma-asset' ) . '.png', 'tmp_name' => $temporary ), $post_id ); if ( is_wp_error( $attachment ) ) { @unlink( $temporary ); return 0; } update_post_meta( $attachment, '_elementor_mcp_figma_asset', $source ); update_post_meta( $attachment, '_wp_attachment_image_alt', $name ); return (int) $attachment; }
 	private static function visual( array $node ): array { $settings = array(); if ( $fill = self::color( $node['fills'] ?? array() ) ) { $settings['background_background'] = 'classic'; $settings['background_color'] = $fill; } if ( $stroke = self::color( $node['strokes'] ?? array() ) ) { $settings['border_border'] = ! empty( $node['strokeDashes'] ) ? 'dashed' : 'solid'; $settings['border_color'] = $stroke; $settings['border_width'] = self::box( $node['strokeWeight'] ?? 1 ); } $radius = $node['cornerRadius'] ?? ( $node['rectangleCornerRadii'][0] ?? null ); if ( null !== $radius ) $settings['border_radius'] = self::box( $radius ); return $settings; }
 	private static function color( array $paints ): ?string { foreach ( $paints as $paint ) { if ( is_array( $paint ) && 'SOLID' === ( $paint['type'] ?? '' ) && false !== ( $paint['visible'] ?? true ) && isset( $paint['color'] ) ) { $c = $paint['color']; return sprintf( '#%02x%02x%02x', round( 255 * $c['r'] ), round( 255 * $c['g'] ), round( 255 * $c['b'] ) ); } } return null; }
 	private static function size( $value ): ?array { return null === $value ? null : array( 'unit' => 'px', 'size' => (float) $value, 'sizes' => array() ); }
