@@ -16,6 +16,9 @@ after the handoff is consumed.
    HostGator account used for development, upload the package to
    `/home4/matumatthew/figma-auth-broker` and set the subdomain's document root
    to `/home4/matumatthew/figma-auth-broker/public`.
+
+The included `public/.htaccess` must be deployed. It routes the OAuth callback
+and handoff endpoints through `index.php` and disables public directory listings.
 5. Put the environment values in the host's secret manager, not in this
    repository. On simple shared hosting without one, copy `config.php.example`
    to `config.php` beside `public/`; it remains outside the document root.
