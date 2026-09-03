@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * Copy this file to config.php on the server. Keep config.php outside public/.
+ * Never commit it or put it in the subdomain's document root.
+ */
+return array(
+	'BROKER_PUBLIC_URL'          => 'https://figma-auth.creativemash.ie',
+	'FIGMA_OAUTH_CLIENT_ID'      => 'replace-after-creating-the-figma-oauth-app',
+	'FIGMA_OAUTH_CLIENT_SECRET'  => 'replace-after-creating-the-figma-oauth-app',
+	'BROKER_RECORD_KEY'          => 'replace-with-a-random-32-character-minimum-secret',
+	'BROKER_STATE_DIR'           => '/home4/matumatthew/figma-auth-broker/state',
+	'WORDPRESS_CALLBACK_ALLOWLIST' => 'https://figma-mcp-elementor.local/wp-admin/admin-post.php?action=elementor_mcp_oauth_callback',
+	'FIGMA_OAUTH_SCOPES'         => 'file_content:read',
+);

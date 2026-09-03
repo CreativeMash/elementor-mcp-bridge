@@ -1,5 +1,6 @@
 node_modules/
 dist/
 .env
+oauth-broker/config.php
 *.zip
 .DS_Store

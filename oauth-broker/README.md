@@ -12,9 +12,14 @@ after the handoff is consumed.
 2. Set its redirect URI to `https://your-broker.example/oauth/callback`.
 3. Request only `file_content:read` for the first release. Add
    `file_variables:read` only for Enterprise customers who need variables.
-4. Serve this application over HTTPS, with `public/` as the web root.
+4. Serve this application over HTTPS, with `public/` as the web root. On the
+   HostGator account used for development, upload the package to
+   `/home4/matumatthew/figma-auth-broker` and set the subdomain's document root
+   to `/home4/matumatthew/figma-auth-broker/public`.
 5. Put the environment values in the host's secret manager, not in this
-   repository. Generate `BROKER_RECORD_KEY` with a secure password generator.
+   repository. On simple shared hosting without one, copy `config.php.example`
+   to `config.php` beside `public/`; it remains outside the document root.
+   Generate `BROKER_RECORD_KEY` with a secure password generator.
 6. Set `BROKER_STATE_DIR` outside `public/`, owned by the PHP process with
    restrictive permissions.
 7. Add each permitted WordPress callback exactly to
