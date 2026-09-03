@@ -91,8 +91,7 @@ final class Elementor_MCP_Admin {
 				<section class="elementor-mcp-card">
 					<div class="elementor-mcp-step"><?php esc_html_e( 'Step 3', 'elementor-mcp-bridge' ); ?></div>
 					<h2><?php esc_html_e( 'Review and create a draft', 'elementor-mcp-bridge' ); ?></h2>
-					<span class="elementor-mcp-state elementor-mcp-state-waiting"><?php esc_html_e( 'Draft-only by default', 'elementor-mcp-bridge' ); ?></span>
-					<p><?php esc_html_e( 'Choose the styles and components to add, then create an editable draft. Publishing remains under your normal WordPress control.', 'elementor-mcp-bridge' ); ?></p>
+					<?php self::draft_card( $preview ); ?>
 				</section>
 			</div>
 
@@ -211,6 +210,15 @@ final class Elementor_MCP_Admin {
 		<?php
 	}
 
+	private static function draft_card( ?array $preview ): void {
+		if ( ! $preview ) { echo '<span class="elementor-mcp-state elementor-mcp-state-waiting">' . esc_html__( 'Analyze a frame first', 'elementor-mcp-bridge' ) . '</span><p>' . esc_html__( 'Creating a draft is available only after reviewing a fresh Figma analysis.', 'elementor-mcp-bridge' ) . '</p>'; return; }
+		?>
+		<span class="elementor-mcp-state elementor-mcp-state-waiting"><?php esc_html_e( 'Draft-only by default', 'elementor-mcp-bridge' ); ?></span>
+		<p><?php esc_html_e( 'This first draft preserves containers and text. Image/vector asset import follows in the next pass.', 'elementor-mcp-bridge' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="elementor_mcp_create_draft"><?php wp_nonce_field( 'elementor_mcp_create_draft' ); ?><input name="draft_title" type="text" value="<?php echo esc_attr( $preview['source']['name'] ?? 'Figma import' ); ?>"><p><label><input name="confirm_draft" type="checkbox" value="1" required> <?php esc_html_e( 'Create a new Elementor draft only. Do not publish or replace an existing page.', 'elementor-mcp-bridge' ); ?></label></p><button type="submit" class="button button-primary"><?php esc_html_e( 'Create draft', 'elementor-mcp-bridge' ); ?></button></form>
+		<?php
+	}
+
 	private static function render_notice(): void {
 		$notice = isset( $_GET['elementor_mcp_notice'] ) ? sanitize_key( wp_unslash( $_GET['elementor_mcp_notice'] ) ) : '';
 		$messages = array(
@@ -220,6 +228,8 @@ final class Elementor_MCP_Admin {
 			'disconnected'                    => array( 'success', __( 'The saved Figma authorization has been removed from this WordPress user.', 'elementor-mcp-bridge' ) ),
 			'analysis-complete'               => array( 'success', __( 'Figma frame analysis is ready to review. No WordPress content was changed.', 'elementor-mcp-bridge' ) ),
 			'analysis-failed'                 => array( 'error', __( 'The Figma frame could not be analyzed. Check the selected frame URL and ensure it is shared with the connected Figma user.', 'elementor-mcp-bridge' ) ),
+			'draft-created'                   => array( 'success', __( 'A new Elementor draft was created. It has not been published.', 'elementor-mcp-bridge' ) ),
+			'draft-failed'                    => array( 'error', __( 'The draft could not be created. Analyze the frame again and confirm draft creation.', 'elementor-mcp-bridge' ) ),
 		);
 		if ( ! isset( $messages[ $notice ] ) ) {
 			return;
