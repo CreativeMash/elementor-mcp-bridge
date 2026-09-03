@@ -1,4 +1,4 @@
-import type { FigmaNode } from "./types.js";
+import type { FigmaDesignSystem, FigmaNode, FigmaPublishedStyle, FigmaVariable, FigmaVariableCollection } from "./types.js";
 
 export interface FigmaReference { fileKey: string; nodeId: string; url: string }
 
@@ -37,5 +37,41 @@ export class FigmaClient {
       `/images/${encodeURIComponent(fileKey)}?ids=${encodeURIComponent(nodeIds.join(","))}&format=png&scale=${scale}`
     );
     return Object.fromEntries(Object.entries(data.images).filter((entry): entry is [string, string] => Boolean(entry[1])));
+  }
+
+  async getDesignSystem(fileKey: string): Promise<FigmaDesignSystem> {
+    const warnings: string[] = [];
+    const styles = await this.optionalRequest<{ meta?: { styles?: FigmaPublishedStyle[] } }>(
+      `/files/${encodeURIComponent(fileKey)}/styles`,
+      "Published Figma styles are unavailable"
+    );
+    const variables = await this.optionalRequest<{
+      meta?: {
+        variables?: Record<string, FigmaVariable>;
+        variableCollections?: Record<string, FigmaVariableCollection>;
+      };
+    }>(
+      `/files/${encodeURIComponent(fileKey)}/variables/local`,
+      "Local Figma variables are unavailable"
+    );
+
+    if (styles.warning) warnings.push(styles.warning);
+    if (variables.warning) warnings.push(variables.warning);
+
+    return {
+      styles: styles.data?.meta?.styles ?? [],
+      variables: Object.values(variables.data?.meta?.variables ?? {}),
+      variableCollections: Object.values(variables.data?.meta?.variableCollections ?? {}),
+      warnings
+    };
+  }
+
+  private async optionalRequest<T>(path: string, label: string): Promise<{ data?: T; warning?: string }> {
+    try {
+      return { data: await this.request<T>(path) };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { warning: `${label}: ${message}` };
+    }
   }
 }

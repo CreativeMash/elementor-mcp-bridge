@@ -19,6 +19,7 @@ final class Elementor_MCP_Bridge {
 
 	public static function routes(): void {
 		register_rest_route( self::NS, '/health', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'health' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ) );
+		register_rest_route( self::NS, '/globals', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'globals' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ) );
 		register_rest_route( self::NS, '/pages', array(
 			array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'pages' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ),
 			array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'create_page' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ),
@@ -51,6 +52,29 @@ final class Elementor_MCP_Bridge {
 			'elementor_pro_version' => defined( 'ELEMENTOR_PRO_VERSION' ) ? ELEMENTOR_PRO_VERSION : null,
 			'authenticated_as' => wp_get_current_user()->user_login,
 		);
+	}
+
+	public static function globals() {
+		$ready = self::require_elementor();
+		if ( is_wp_error( $ready ) ) return $ready;
+		$kit = \Elementor\Plugin::$instance->kits_manager->get_active_kit();
+		$colors = array_merge(
+			self::global_setting( $kit->get_settings_for_display( 'system_colors' ) ),
+			self::global_setting( $kit->get_settings_for_display( 'custom_colors' ) )
+		);
+		$typography = array_merge(
+			self::global_setting( $kit->get_settings_for_display( 'system_typography' ) ),
+			self::global_setting( $kit->get_settings_for_display( 'custom_typography' ) )
+		);
+		return array(
+			'activeKit' => array( 'id' => $kit->get_id() ?: null, 'title' => $kit->get_main_post() ? get_the_title( $kit->get_main_post() ) : null ),
+			'colors' => $colors,
+			'typography' => $typography,
+		);
+	}
+
+	private static function global_setting( $value ): array {
+		return is_array( $value ) ? array_values( $value ) : array();
 	}
 
 	public static function pages( WP_REST_Request $request ): array {

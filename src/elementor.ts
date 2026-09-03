@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ConversionResult, ElementorElement, FigmaColor, FigmaNode, FigmaPaint } from "./types.js";
+import type { ConversionResult, ElementorElement, FigmaColor, FigmaFrameStyleUsage, FigmaNode, FigmaPaint } from "./types.js";
 
 const rgb = (color?: FigmaColor): string | undefined => {
   if (!color) return undefined;
@@ -86,6 +86,50 @@ export function collectImageNodeIds(node: FigmaNode): string[] {
   };
   visit(node);
   return found;
+}
+
+export function collectFrameStyleUsage(node: FigmaNode): FigmaFrameStyleUsage {
+  const colors = new Map<string, number>();
+  const typography = new Map<string, FigmaFrameStyleUsage["typography"][number]>();
+  const components: FigmaFrameStyleUsage["components"] = [];
+
+  const countColor = (paint?: FigmaPaint) => {
+    if (!paint || paint.visible === false || paint.type !== "SOLID") return;
+    const value = rgb(paint.color);
+    if (value) colors.set(value, (colors.get(value) ?? 0) + 1);
+  };
+
+  const visit = (current: FigmaNode) => {
+    current.fills?.forEach(countColor);
+    current.strokes?.forEach(countColor);
+
+    if (current.type === "TEXT" && current.style?.fontFamily) {
+      const text = {
+        fontFamily: current.style.fontFamily,
+        fontWeight: current.style.fontWeight,
+        fontSize: current.style.fontSize,
+        lineHeightPx: current.style.lineHeightPx,
+        letterSpacing: current.style.letterSpacing,
+        occurrences: 1
+      };
+      const key = [text.fontFamily, text.fontWeight ?? "", text.fontSize ?? "", text.lineHeightPx ?? "", text.letterSpacing ?? ""].join("|");
+      const existing = typography.get(key);
+      typography.set(key, existing ? { ...existing, occurrences: existing.occurrences + 1 } : text);
+    }
+
+    if (current.type === "COMPONENT" || current.type === "INSTANCE") {
+      components.push({ id: current.id, name: current.name, type: current.type });
+    }
+
+    current.children?.forEach(visit);
+  };
+
+  visit(node);
+  return {
+    colors: [...colors.entries()].map(([value, occurrences]) => ({ value, occurrences })).sort((a, b) => b.occurrences - a.occurrences),
+    typography: [...typography.values()].sort((a, b) => b.occurrences - a.occurrences),
+    components
+  };
 }
 
 export function convertFigmaNode(node: FigmaNode, source: ConversionResult["source"], imageUrls: Record<string, string> = {}): ConversionResult {

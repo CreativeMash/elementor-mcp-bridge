@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import type { ElementorElement } from "./types.js";
+import type { ElementorElement, ElementorGlobalContext } from "./types.js";
 
 export class WordPressClient {
   private readonly api: string;
@@ -22,6 +22,7 @@ export class WordPressClient {
   health() { return this.request<Record<string, unknown>>("/health"); }
   listPages(search = "") { return this.request<unknown[]>(`/pages?search=${encodeURIComponent(search)}`); }
   getPage(pageId: number) { return this.request<Record<string, unknown>>(`/pages/${pageId}`); }
+  getGlobals() { return this.request<ElementorGlobalContext>("/globals"); }
   createPage(title: string, content: ElementorElement[], status = "draft") {
     return this.request<Record<string, unknown>>("/pages", { method: "POST", body: JSON.stringify({ title, content, status, template: this.config.pageTemplate }) });
   }

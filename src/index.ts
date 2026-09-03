@@ -3,8 +3,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { loadConfig, requireFigma, requireWordPress } from "./config.js";
-import { collectImageNodeIds, convertFigmaNode } from "./elementor.js";
+import { collectFrameStyleUsage, collectImageNodeIds, convertFigmaNode } from "./elementor.js";
 import { FigmaClient, parseFigmaUrl } from "./figma.js";
+import { buildStyleGuidePreview } from "./style-guide.js";
 import { importElementorImages, WordPressClient } from "./wordpress.js";
 
 const config = loadConfig();
@@ -32,6 +33,29 @@ server.tool("figma_convert_preview", "Convert a selected Figma frame to Elemento
   figmaUrl: z.string().url()
 }, async ({ figmaUrl }) => {
   try { return text(await convert(figmaUrl)); } catch (error) { return failure(error); }
+});
+
+server.tool("figma_preview_style_guide", "Compare the selected Figma frame's styles and available variables with Elementor global styles. This does not change WordPress.", {
+  figmaUrl: z.string().url()
+}, async ({ figmaUrl }) => {
+  try {
+    requireFigma(config);
+    requireWordPress(config);
+    const ref = parseFigmaUrl(figmaUrl);
+    const figma = new FigmaClient(config.figmaToken);
+    const wordpress = new WordPressClient(config);
+    const [node, designSystem, globals] = await Promise.all([
+      figma.getNode(ref),
+      figma.getDesignSystem(ref.fileKey),
+      wordpress.getGlobals()
+    ]);
+    return text(buildStyleGuidePreview(
+      { fileKey: ref.fileKey, nodeId: ref.nodeId, figmaUrl },
+      designSystem,
+      collectFrameStyleUsage(node),
+      globals
+    ));
+  } catch (error) { return failure(error); }
 });
 
 server.tool("elementor_connection_status", "Check the Elementor bridge, WordPress and Elementor versions.", {}, async () => {

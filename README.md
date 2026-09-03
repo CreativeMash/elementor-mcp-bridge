@@ -107,6 +107,7 @@ The MCP client should call `figma_create_elementor_draft` with `confirm=true` an
 | --- | --- | --- |
 | `figma_inspect_frame` | No | Reports supported layers, warnings and conversion totals |
 | `figma_convert_preview` | No | Returns the generated Elementor JSON |
+| `figma_preview_style_guide` | No | Compares Figma frame styles and available variables with Elementor global styles |
 | `elementor_connection_status` | No | Checks authentication and installed versions |
 | `elementor_list_pages` | No | Lists Elementor pages |
 | `elementor_get_page` | No | Reads one page's Elementor document |

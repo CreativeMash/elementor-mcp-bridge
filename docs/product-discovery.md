@@ -58,6 +58,8 @@ The production product should use a Figma authorization flow rather than a perso
 
 The plugin already runs inside the target WordPress site, so users should not enter a site URL, username, or application password. The current signed-in user and WordPress capabilities should authorize imports. The plugin should verify Elementor and Elementor Pro compatibility during onboarding.
 
+Local-development sites must present a certificate trusted by the conversion runtime. The product must not require users to disable TLS verification to connect to a local WordPress instance; onboarding should detect an untrusted certificate and explain how to trust or replace it.
+
 ### Hosted Conversion Service
 
 The current TypeScript converter requires Node.js and should not be a requirement for WordPress users. The preferred production model is a hosted conversion service paired with the WordPress plugin. The plugin and service need a short-lived, revocable authorization handshake rather than a user-managed WordPress application password.

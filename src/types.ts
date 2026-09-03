@@ -69,3 +69,66 @@ export interface ConversionResult {
   warnings: string[];
   stats: { containers: number; widgets: number; skipped: number };
 }
+
+export interface FigmaPublishedStyle {
+  key: string;
+  node_id: string;
+  name: string;
+  style_type: "FILL" | "TEXT" | "EFFECT" | "GRID" | string;
+  description?: string;
+}
+
+export interface FigmaVariableCollection {
+  id: string;
+  name: string;
+  modes?: Array<{ modeId: string; name: string }>;
+}
+
+export interface FigmaVariable {
+  id: string;
+  name: string;
+  variableCollectionId: string;
+  resolvedType: "BOOLEAN" | "FLOAT" | "STRING" | "COLOR" | string;
+  valuesByMode: Record<string, unknown>;
+  remote?: boolean;
+  description?: string;
+}
+
+export interface FigmaDesignSystem {
+  styles: FigmaPublishedStyle[];
+  variables: FigmaVariable[];
+  variableCollections: FigmaVariableCollection[];
+  warnings: string[];
+}
+
+export interface FigmaFrameColor {
+  value: string;
+  occurrences: number;
+}
+
+export interface FigmaFrameTypography {
+  fontFamily: string;
+  fontWeight?: number;
+  fontSize?: number;
+  lineHeightPx?: number;
+  letterSpacing?: number;
+  occurrences: number;
+}
+
+export interface FigmaComponentCandidate {
+  id: string;
+  name: string;
+  type: "COMPONENT" | "INSTANCE";
+}
+
+export interface FigmaFrameStyleUsage {
+  colors: FigmaFrameColor[];
+  typography: FigmaFrameTypography[];
+  components: FigmaComponentCandidate[];
+}
+
+export interface ElementorGlobalContext {
+  activeKit: { id: number | null; title: string | null };
+  colors: Array<Record<string, unknown>>;
+  typography: Array<Record<string, unknown>>;
+}
