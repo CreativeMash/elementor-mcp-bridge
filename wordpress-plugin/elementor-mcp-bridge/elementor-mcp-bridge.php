@@ -10,6 +10,10 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
+if ( is_admin() ) {
+	require_once __DIR__ . '/includes/class-elementor-mcp-admin.php';
+}
+
 final class Elementor_MCP_Bridge {
 	private const NS = 'elementor-mcp/v1';
 
@@ -241,3 +245,7 @@ final class Elementor_MCP_Bridge {
 }
 
 Elementor_MCP_Bridge::init();
+
+if ( is_admin() && class_exists( 'Elementor_MCP_Admin' ) ) {
+	Elementor_MCP_Admin::init();
+}
