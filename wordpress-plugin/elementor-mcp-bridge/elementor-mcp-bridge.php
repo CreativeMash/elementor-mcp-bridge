@@ -20,6 +20,7 @@ final class Elementor_MCP_Bridge {
 	public static function routes(): void {
 		register_rest_route( self::NS, '/health', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'health' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ) );
 		register_rest_route( self::NS, '/globals', array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'globals' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ) );
+		register_rest_route( self::NS, '/globals/import', array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'import_globals' ), 'permission_callback' => array( __CLASS__, 'can_manage' ) ) );
 		register_rest_route( self::NS, '/pages', array(
 			array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'pages' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ),
 			array( 'methods' => 'POST', 'callback' => array( __CLASS__, 'create_page' ), 'permission_callback' => array( __CLASS__, 'can_edit' ) ),
@@ -75,6 +76,96 @@ final class Elementor_MCP_Bridge {
 
 	private static function global_setting( $value ): array {
 		return is_array( $value ) ? array_values( $value ) : array();
+	}
+
+	public static function import_globals( WP_REST_Request $request ) {
+		$ready = self::require_elementor();
+		if ( is_wp_error( $ready ) ) return $ready;
+		if ( true !== $request->get_param( 'confirm' ) ) return new WP_Error( 'confirmation_required', 'Set confirm=true after approving the selected global styles.', array( 'status' => 400 ) );
+		$colors = self::selected_colors( $request->get_param( 'colors' ) );
+		if ( is_wp_error( $colors ) ) return $colors;
+		$typography = self::selected_typography( $request->get_param( 'typography' ) );
+		if ( is_wp_error( $typography ) ) return $typography;
+		if ( ! $colors && ! $typography ) return new WP_Error( 'empty_selection', 'Select at least one global style to import.', array( 'status' => 400 ) );
+
+		$kit = \Elementor\Plugin::$instance->kits_manager->get_active_kit();
+		$current_colors = self::global_setting( $kit->get_settings( 'custom_colors' ) );
+		$current_typography = self::global_setting( $kit->get_settings( 'custom_typography' ) );
+		$added_colors = self::append_colors( $current_colors, $colors );
+		$added_typography = self::append_typography( $current_typography, $typography );
+		if ( ! $added_colors && ! $added_typography ) return array( 'activeKit' => $kit->get_id(), 'added' => array( 'colors' => array(), 'typography' => array() ), 'unchanged' => true );
+
+		wp_save_post_revision( $kit->get_id() );
+		$kit->update_settings( array( 'custom_colors' => $current_colors, 'custom_typography' => $current_typography ) );
+		\Elementor\Plugin::$instance->files_manager->clear_cache();
+		return array( 'activeKit' => $kit->get_id(), 'added' => array( 'colors' => $added_colors, 'typography' => $added_typography ), 'unchanged' => false );
+	}
+
+	private static function selected_colors( $items ) {
+		if ( ! is_array( $items ) || count( $items ) > 8 ) return new WP_Error( 'invalid_colors', 'Colors must be an array of up to eight selected styles.', array( 'status' => 400 ) );
+		$selected = array();
+		foreach ( $items as $item ) {
+			$name = is_array( $item ) ? sanitize_text_field( $item['name'] ?? '' ) : '';
+			$value = is_array( $item ) ? strtolower( trim( (string) ( $item['value'] ?? '' ) ) ) : '';
+			if ( ! $name || ! preg_match( '/^#(?:[0-9a-f]{3}){1,2}$/i', $value ) ) return new WP_Error( 'invalid_color', 'Each selected color needs a name and hexadecimal value.', array( 'status' => 400 ) );
+			$selected[] = array( 'name' => $name, 'value' => $value );
+		}
+		return $selected;
+	}
+
+	private static function selected_typography( $items ) {
+		if ( ! is_array( $items ) || count( $items ) > 5 ) return new WP_Error( 'invalid_typography', 'Typography must be an array of up to five selected styles.', array( 'status' => 400 ) );
+		$selected = array();
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) ) return new WP_Error( 'invalid_typography', 'Each typography selection must be an object.', array( 'status' => 400 ) );
+			$name = sanitize_text_field( $item['name'] ?? '' );
+			$font = sanitize_text_field( $item['fontFamily'] ?? '' );
+			$weight = absint( $item['fontWeight'] ?? 400 );
+			$size = (float) ( $item['fontSize'] ?? 0 );
+			$line_height = (float) ( $item['lineHeightPx'] ?? 0 );
+			$letter_spacing = (float) ( $item['letterSpacing'] ?? 0 );
+			if ( ! $name || ! $font || $weight < 100 || $weight > 900 || $size <= 0 || $size > 500 || $line_height < 0 || $line_height > 1000 || $letter_spacing < -100 || $letter_spacing > 100 ) return new WP_Error( 'invalid_typography', 'Each typography style must have valid font, weight, size, line height, and letter spacing values.', array( 'status' => 400 ) );
+			$selected[] = array( 'name' => $name, 'fontFamily' => $font, 'fontWeight' => $weight, 'fontSize' => $size, 'lineHeightPx' => $line_height, 'letterSpacing' => $letter_spacing );
+		}
+		return $selected;
+	}
+
+	private static function append_colors( array &$current, array $selected ): array {
+		$added = array();
+		foreach ( $selected as $color ) {
+			$title = 'Figma / ' . $color['name'];
+			$exists = array_filter( $current, static function ( $item ) use ( $title, $color ) { return ( $item['title'] ?? '' ) === $title && strtolower( $item['color'] ?? '' ) === $color['value']; } );
+			if ( $exists ) continue;
+			$item = array( '_id' => self::global_id( $current ), 'title' => $title, 'color' => $color['value'] );
+			$current[] = $item;
+			$added[] = $item;
+		}
+		return $added;
+	}
+
+	private static function append_typography( array &$current, array $selected ): array {
+		$added = array();
+		foreach ( $selected as $style ) {
+			$title = 'Figma / ' . $style['name'];
+			$exists = array_filter( $current, static function ( $item ) use ( $title, $style ) { return ( $item['title'] ?? '' ) === $title && ( $item['typography_font_family'] ?? '' ) === $style['fontFamily']; } );
+			if ( $exists ) continue;
+			$item = array(
+				'_id' => self::global_id( $current ), 'title' => $title, 'typography_typography' => 'custom',
+				'typography_font_family' => $style['fontFamily'], 'typography_font_weight' => (string) $style['fontWeight'],
+				'typography_font_size' => array( 'unit' => 'px', 'size' => $style['fontSize'], 'sizes' => array() ),
+				'typography_line_height' => array( 'unit' => 'px', 'size' => $style['lineHeightPx'], 'sizes' => array() ),
+				'typography_letter_spacing' => array( 'unit' => 'px', 'size' => $style['letterSpacing'], 'sizes' => array() ),
+			);
+			$current[] = $item;
+			$added[] = $item;
+		}
+		return $added;
+	}
+
+	private static function global_id( array $items ): string {
+		$ids = array_column( $items, '_id' );
+		do { $id = substr( str_replace( '-', '', wp_generate_uuid4() ), 0, 7 ); } while ( in_array( $id, $ids, true ) );
+		return $id;
 	}
 
 	public static function pages( WP_REST_Request $request ): array {

@@ -23,6 +23,15 @@ export class WordPressClient {
   listPages(search = "") { return this.request<unknown[]>(`/pages?search=${encodeURIComponent(search)}`); }
   getPage(pageId: number) { return this.request<Record<string, unknown>>(`/pages/${pageId}`); }
   getGlobals() { return this.request<ElementorGlobalContext>("/globals"); }
+  importStyleGuide(styles: {
+    colors: Array<{ name: string; value: string }>;
+    typography: Array<{ name: string; fontFamily: string; fontWeight?: number; fontSize?: number; lineHeightPx?: number; letterSpacing?: number }>;
+  }) {
+    return this.request<Record<string, unknown>>("/globals/import", {
+      method: "POST",
+      body: JSON.stringify({ ...styles, confirm: true })
+    });
+  }
   createPage(title: string, content: ElementorElement[], status = "draft") {
     return this.request<Record<string, unknown>>("/pages", { method: "POST", body: JSON.stringify({ title, content, status, template: this.config.pageTemplate }) });
   }
