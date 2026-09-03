@@ -18,7 +18,7 @@ final class Elementor_MCP_Draft_Importer {
 		update_post_meta( $id, '_elementor_edit_mode', 'builder' ); update_post_meta( $id, '_elementor_template_type', 'wp-page' ); update_post_meta( $id, '_elementor_version', ELEMENTOR_VERSION );
 		update_post_meta( $id, '_elementor_data', wp_slash( wp_json_encode( array( self::convert_node( $preview['document'] ) ) ) ) );
 		update_post_meta( $id, '_wp_page_template', 'elementor_canvas' ); clean_post_cache( $id );
-		self::redirect( 'draft-created', array( 'page' => $id ) );
+		self::redirect( 'draft-created', array( 'draft_id' => $id ) );
 	}
 
 	private static function convert( array $node ): bool { return null !== self::convert_node( $node ); }
