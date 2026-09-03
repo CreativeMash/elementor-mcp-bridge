@@ -66,7 +66,9 @@ Local-development sites must present a certificate trusted by the conversion run
 
 The current TypeScript MCP server is a developer prototype and a behavioral reference while the converter is ported into the plugin. The production plugin will use WordPress's HTTP API for Figma requests, store the minimum required Figma authorization data securely, and perform analysis, preview, and Elementor JSON generation in PHP.
 
-Before implementation, validate Figma OAuth scopes, token storage and revocation, WordPress HTTP API limits/timeouts, long-running conversion handling, and the practical size limits for Figma files. A hosted service is not part of the user-facing product architecture.
+Figma's OAuth code exchange requires a confidential client secret, which must never be bundled into a distributed WordPress plugin. A narrowly scoped, security-reviewed OAuth broker may therefore be used only to hold that secret, complete the Figma exchange, and hand the result back to the plugin. It must not perform conversion, retain Figma files, or become a dependency for Elementor generation. The plugin's connection client uses a one-time state, a 10-minute expiry, HTTPS-only broker URLs, server-to-server exchange, and encrypted per-user token storage. Refresh, revocation, broker authentication, and key-rotation behavior must be reviewed before release.
+
+The broker contract must use Figma's authorization-code flow with PKCE and the minimum `file_content:read` scope. It must allow only registered WordPress callback URLs, return a signed, one-time handoff valid for no more than 60 seconds, and bind that handoff to the plugin-issued state and exact callback URL. It must never log, return, or persist a user's authorization data outside the exchange required to deliver it to their site.
 
 ## Safety Requirements
 

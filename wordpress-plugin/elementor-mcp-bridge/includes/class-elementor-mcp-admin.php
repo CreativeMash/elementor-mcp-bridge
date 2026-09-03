@@ -60,9 +60,11 @@ final class Elementor_MCP_Admin {
 		}
 
 		$elementor_ready = did_action( 'elementor/loaded' ) && defined( 'ELEMENTOR_VERSION' );
-		$broker_ready = self::oauth_broker_ready();
+		$broker_ready = Elementor_MCP_Figma_Connection::broker_ready();
+		$connection = Elementor_MCP_Figma_Connection::summary();
 		?>
 		<div class="wrap elementor-mcp-wrap">
+			<?php self::render_notice(); ?>
 			<section class="elementor-mcp-hero">
 				<h1><?php esc_html_e( 'Figma Import', 'elementor-mcp-bridge' ); ?></h1>
 				<p><?php esc_html_e( 'Turn a Figma frame into an editable Elementor draft, with a review step before anything changes on your site.', 'elementor-mcp-bridge' ); ?></p>
@@ -72,14 +74,13 @@ final class Elementor_MCP_Admin {
 				<section class="elementor-mcp-card">
 					<div class="elementor-mcp-step"><?php esc_html_e( 'Step 1', 'elementor-mcp-bridge' ); ?></div>
 					<h2><?php esc_html_e( 'Connect Figma', 'elementor-mcp-bridge' ); ?></h2>
-					<?php self::state_badge( $broker_ready, __( 'Connection service ready', 'elementor-mcp-bridge' ), __( 'Connection setup pending', 'elementor-mcp-bridge' ) ); ?>
-					<p><?php esc_html_e( 'You will sign in with Figma in your browser. This plugin will never ask you to paste a personal access token.', 'elementor-mcp-bridge' ); ?></p>
+					<?php self::connection_card( $broker_ready, $connection ); ?>
 				</section>
 
 				<section class="elementor-mcp-card">
 					<div class="elementor-mcp-step"><?php esc_html_e( 'Step 2', 'elementor-mcp-bridge' ); ?></div>
 					<h2><?php esc_html_e( 'Analyze a frame', 'elementor-mcp-bridge' ); ?></h2>
-					<span class="elementor-mcp-state elementor-mcp-state-waiting"><?php esc_html_e( 'Available after connection', 'elementor-mcp-bridge' ); ?></span>
+					<?php self::state_badge( ! empty( $connection ) && empty( $connection['expired'] ), __( 'Connection ready', 'elementor-mcp-bridge' ), __( 'Available after connection', 'elementor-mcp-bridge' ) ); ?>
 					<p><?php esc_html_e( 'Paste a Figma frame URL. We will show containers, styles, assets, components, conflicts, and unsupported details before importing.', 'elementor-mcp-bridge' ); ?></p>
 				</section>
 
@@ -97,20 +98,83 @@ final class Elementor_MCP_Admin {
 					<tr><td><?php esc_html_e( 'WordPress', 'elementor-mcp-bridge' ); ?></td><td><?php echo esc_html( get_bloginfo( 'version' ) ); ?></td></tr>
 					<tr><td><?php esc_html_e( 'Elementor', 'elementor-mcp-bridge' ); ?></td><td><?php self::state_badge( $elementor_ready, defined( 'ELEMENTOR_VERSION' ) ? ELEMENTOR_VERSION : __( 'Ready', 'elementor-mcp-bridge' ), __( 'Not active', 'elementor-mcp-bridge' ) ); ?></td></tr>
 					<tr><td><?php esc_html_e( 'Elementor Pro', 'elementor-mcp-bridge' ); ?></td><td><?php echo esc_html( defined( 'ELEMENTOR_PRO_VERSION' ) ? ELEMENTOR_PRO_VERSION : __( 'Not detected', 'elementor-mcp-bridge' ) ); ?></td></tr>
-					<tr><td><?php esc_html_e( 'Figma authorization', 'elementor-mcp-bridge' ); ?></td><td><?php self::state_badge( $broker_ready, __( 'Ready to connect', 'elementor-mcp-bridge' ), __( 'Service not configured', 'elementor-mcp-bridge' ) ); ?></td></tr>
+					<tr><td><?php esc_html_e( 'Figma authorization', 'elementor-mcp-bridge' ); ?></td><td><?php self::authorization_state( $broker_ready, $connection ); ?></td></tr>
 				</table>
 			</section>
 		</div>
 		<?php
 	}
 
-	private static function oauth_broker_ready(): bool {
-		return defined( 'ELEMENTOR_MCP_FIGMA_OAUTH_BROKER_URL' ) && wp_http_validate_url( ELEMENTOR_MCP_FIGMA_OAUTH_BROKER_URL );
-	}
-
 	private static function state_badge( bool $ready, string $ready_label, string $waiting_label ): void {
 		$class = $ready ? 'elementor-mcp-state-ready' : 'elementor-mcp-state-waiting';
 		$label = $ready ? $ready_label : $waiting_label;
 		echo '<span class="elementor-mcp-state ' . esc_attr( $class ) . '">' . esc_html( $label ) . '</span>';
+	}
+
+	private static function connection_card( bool $broker_ready, ?array $connection ): void {
+		if ( ! $broker_ready ) {
+			self::state_badge( false, '', __( 'Service not configured', 'elementor-mcp-bridge' ) );
+			echo '<p>' . esc_html__( 'A secure OAuth service must be provisioned before sign-in can begin. No Figma token is requested or stored while it is unavailable.', 'elementor-mcp-bridge' ) . '</p>';
+			return;
+		}
+
+		if ( $connection && empty( $connection['expired'] ) ) {
+			self::state_badge( true, __( 'Connected', 'elementor-mcp-bridge' ), '' );
+			$handle = ! empty( $connection['handle'] ) ? sprintf( __( 'Connected as %s.', 'elementor-mcp-bridge' ), $connection['handle'] ) : __( 'Figma access is connected for this WordPress administrator.', 'elementor-mcp-bridge' );
+			echo '<p>' . esc_html( $handle ) . '</p>';
+			self::disconnect_form();
+			return;
+		}
+
+		if ( $connection ) {
+			self::state_badge( false, '', __( 'Connection expired', 'elementor-mcp-bridge' ) );
+			echo '<p>' . esc_html__( 'Reconnect Figma to continue. The expired authorization can be removed below.', 'elementor-mcp-bridge' ) . '</p>';
+			self::disconnect_form();
+		}
+
+		echo '<p>' . esc_html__( 'Sign in with Figma in your browser. This plugin never asks you to paste a personal access token.', 'elementor-mcp-bridge' ) . '</p>';
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="elementor_mcp_start_oauth">
+			<?php wp_nonce_field( 'elementor_mcp_start_oauth' ); ?>
+			<button type="submit" class="button button-primary"><?php esc_html_e( 'Connect Figma', 'elementor-mcp-bridge' ); ?></button>
+		</form>
+		<?php
+	}
+
+	private static function disconnect_form(): void {
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="elementor_mcp_disconnect_figma">
+			<?php wp_nonce_field( 'elementor_mcp_disconnect_figma' ); ?>
+			<button type="submit" class="button-link-delete"><?php esc_html_e( 'Disconnect Figma', 'elementor-mcp-bridge' ); ?></button>
+		</form>
+		<?php
+	}
+
+	private static function authorization_state( bool $broker_ready, ?array $connection ): void {
+		if ( ! $broker_ready ) {
+			self::state_badge( false, '', __( 'Service not configured', 'elementor-mcp-bridge' ) );
+			return;
+		}
+		if ( $connection && empty( $connection['expired'] ) ) {
+			self::state_badge( true, __( 'Connected', 'elementor-mcp-bridge' ), '' );
+			return;
+		}
+		self::state_badge( false, '', $connection ? __( 'Connection expired', 'elementor-mcp-bridge' ) : __( 'Ready to connect', 'elementor-mcp-bridge' ) );
+	}
+
+	private static function render_notice(): void {
+		$notice = isset( $_GET['elementor_mcp_notice'] ) ? sanitize_key( wp_unslash( $_GET['elementor_mcp_notice'] ) ) : '';
+		$messages = array(
+			'connection-service-unavailable' => array( 'error', __( 'The secure Figma connection service has not been configured.', 'elementor-mcp-bridge' ) ),
+			'connection-failed'              => array( 'error', __( 'Figma could not be connected. No authorization data was saved; please try again or contact the site administrator.', 'elementor-mcp-bridge' ) ),
+			'connection-complete'            => array( 'success', __( 'Figma is connected for your WordPress user.', 'elementor-mcp-bridge' ) ),
+			'disconnected'                    => array( 'success', __( 'The saved Figma authorization has been removed from this WordPress user.', 'elementor-mcp-bridge' ) ),
+		);
+		if ( ! isset( $messages[ $notice ] ) ) {
+			return;
+		}
+		echo '<div class="notice notice-' . esc_attr( $messages[ $notice ][0] ) . ' is-dismissible"><p>' . esc_html( $messages[ $notice ][1] ) . '</p></div>';
 	}
 }
