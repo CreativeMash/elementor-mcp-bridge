@@ -69,7 +69,7 @@ final class Elementor_MCP_Figma_Analyzer {
 	}
 
 	private static function build_preview( array $reference, array $root ): array {
-		$stats = array( 'containers' => 0, 'text' => 0, 'images' => 0, 'components' => 0, 'skipped' => 0, 'auto_layout' => 0 );
+		$stats = array( 'containers' => 0, 'text' => 0, 'images' => 0, 'components' => 0, 'variable_bindings' => 0, 'skipped' => 0, 'auto_layout' => 0 );
 		$unsupported = array();
 		$colors = array();
 		$typography = array();
@@ -82,6 +82,7 @@ final class Elementor_MCP_Figma_Analyzer {
 			}
 			$type = (string) ( $node['type'] ?? 'UNKNOWN' );
 			$children = isset( $node['children'] ) && is_array( $node['children'] ) ? $node['children'] : array();
+			$stats['variable_bindings'] += count( (array) ( $node['boundVariables'] ?? array() ) );
 			foreach ( array_merge( (array) ( $node['fills'] ?? array() ), (array) ( $node['strokes'] ?? array() ) ) as $paint ) {
 				$color = is_array( $paint ) ? self::paint_color( $paint ) : null;
 				if ( $color ) {
@@ -146,6 +147,10 @@ final class Elementor_MCP_Figma_Analyzer {
 			return null;
 		}
 		$channels = array_map( static function ( string $channel ) use ( $paint ): int { return max( 0, min( 255, (int) round( 255 * (float) ( $paint['color'][ $channel ] ?? 0 ) ) ) ); }, array( 'r', 'g', 'b' ) );
+		$opacity = max( 0, min( 1, (float) ( $paint['opacity'] ?? $paint['color']['a'] ?? 1 ) ) );
+		if ( 1 > $opacity ) {
+			return sprintf( 'rgba(%d, %d, %d, %s)', $channels[0], $channels[1], $channels[2], rtrim( rtrim( sprintf( '%.3F', $opacity ), '0' ), '.' ) );
+		}
 		return sprintf( '#%02x%02x%02x', $channels[0], $channels[1], $channels[2] );
 	}
 

@@ -53,6 +53,8 @@ final class Elementor_MCP_Admin {
 			.elementor-mcp-preview { background: #f8fafc; border: 1px solid #d8dee9; border-radius: 10px; margin-top: 14px; padding: 12px; }
 			.elementor-mcp-preview h3 { font-size: 14px; margin: 0 0 8px; }
 			.elementor-mcp-preview p, .elementor-mcp-preview ul { font-size: 13px; margin: 8px 0; }
+			.elementor-mcp-conversion-plan { margin: 12px 0 0; }
+			.elementor-mcp-conversion-plan li { margin: 4px 0; }
 			@media (max-width: 782px) { .elementor-mcp-grid { grid-template-columns: 1fr; } .elementor-mcp-hero { padding: 28px; } }
 		</style>
 		<?php
@@ -205,7 +207,15 @@ final class Elementor_MCP_Admin {
 			<?php $styles = is_array( $preview['styles'] ?? null ) ? $preview['styles'] : array(); ?>
 			<?php if ( ! empty( $styles['colors'] ) ) : ?><p><strong><?php esc_html_e( 'Figma colors:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $color ): string { return $color['value'] . ' (' . absint( $color['occurrences'] ) . ')'; }, $styles['colors'] ) ) ); ?></p><?php endif; ?>
 			<?php if ( ! empty( $styles['typography'] ) ) : ?><p><strong><?php esc_html_e( 'Typography:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $style ): string { return $style['font'] . ' ' . absint( $style['weight'] ) . ' ' . $style['size'] . 'px'; }, $styles['typography'] ) ) ); ?></p><?php endif; ?>
-			<?php if ( ! empty( $styles['components'] ) ) : ?><p><strong><?php esc_html_e( 'Repeated components:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $component ): string { return $component['name'] . ' (' . absint( $component['occurrences'] ) . ')'; }, $styles['components'] ) ) ); ?></p><?php endif; ?>
+			<?php if ( ! empty( $styles['components'] ) ) : ?><p><strong><?php esc_html_e( 'Figma components:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $component ): string { return $component['name'] . ' (' . absint( $component['occurrences'] ) . ')'; }, $styles['components'] ) ) ); ?></p><?php endif; ?>
+			<p><strong><?php esc_html_e( 'Conversion plan:', 'elementor-mcp-bridge' ); ?></strong></p>
+			<ul class="elementor-mcp-conversion-plan">
+				<li><?php esc_html_e( 'Frames and groups become editable Elementor containers.', 'elementor-mcp-bridge' ); ?></li>
+				<li><?php esc_html_e( 'Text becomes Heading or Text Editor widgets; image fills import as media.', 'elementor-mcp-bridge' ); ?></li>
+				<li><?php esc_html_e( 'Vectors import as sanitized SVG media, with a PNG fallback if needed.', 'elementor-mcp-bridge' ); ?></li>
+				<?php if ( ! empty( $stats['components'] ) ) : ?><li><?php esc_html_e( 'Figma component instances are expanded into editable containers and child layers. Shared Elementor templates are not created yet.', 'elementor-mcp-bridge' ); ?></li><?php endif; ?>
+				<?php if ( ! empty( $stats['variable_bindings'] ) ) : ?><li><?php echo esc_html( sprintf( _n( '%d Figma variable binding was detected. Global Elementor styles will not be changed.', '%d Figma variable bindings were detected. Global Elementor styles will not be changed.', absint( $stats['variable_bindings'] ), 'elementor-mcp-bridge' ), absint( $stats['variable_bindings'] ) ) ); ?></li><?php endif; ?>
+			</ul>
 		</div>
 		<?php
 	}
@@ -214,7 +224,7 @@ final class Elementor_MCP_Admin {
 		if ( ! $preview ) { echo '<span class="elementor-mcp-state elementor-mcp-state-waiting">' . esc_html__( 'Analyze a frame first', 'elementor-mcp-bridge' ) . '</span><p>' . esc_html__( 'Creating a draft is available only after reviewing a fresh Figma analysis.', 'elementor-mcp-bridge' ) . '</p>'; return; }
 		?>
 		<span class="elementor-mcp-state elementor-mcp-state-waiting"><?php esc_html_e( 'Draft-only by default', 'elementor-mcp-bridge' ); ?></span>
-		<p><?php esc_html_e( 'This first draft preserves containers and text. Image/vector asset import follows in the next pass.', 'elementor-mcp-bridge' ); ?></p>
+		<p><?php esc_html_e( 'The draft preserves editable containers and text, imports image/vector assets, and never publishes or replaces existing content.', 'elementor-mcp-bridge' ); ?></p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="elementor_mcp_create_draft"><?php wp_nonce_field( 'elementor_mcp_create_draft' ); ?><input name="draft_title" type="text" value="<?php echo esc_attr( $preview['source']['name'] ?? 'Figma import' ); ?>"><p><label><input name="confirm_draft" type="checkbox" value="1" required> <?php esc_html_e( 'Create a new Elementor draft only. Do not publish or replace an existing page.', 'elementor-mcp-bridge' ); ?></label></p><button type="submit" class="button button-primary"><?php esc_html_e( 'Create draft', 'elementor-mcp-bridge' ); ?></button></form>
 		<?php
 	}
