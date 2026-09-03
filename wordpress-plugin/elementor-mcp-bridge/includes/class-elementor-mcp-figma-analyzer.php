@@ -71,20 +71,36 @@ final class Elementor_MCP_Figma_Analyzer {
 	private static function build_preview( array $reference, array $root ): array {
 		$stats = array( 'containers' => 0, 'text' => 0, 'images' => 0, 'components' => 0, 'skipped' => 0, 'auto_layout' => 0 );
 		$unsupported = array();
+		$colors = array();
+		$typography = array();
+		$components = array();
 		$without_auto_layout = 0;
-		$walk = static function ( array $node ) use ( &$walk, &$stats, &$unsupported, &$without_auto_layout ): void {
+		$walk = static function ( array $node ) use ( &$walk, &$stats, &$unsupported, &$colors, &$typography, &$components, &$without_auto_layout ): void {
 			if ( false === ( $node['visible'] ?? true ) ) {
 				$stats['skipped']++;
 				return;
 			}
 			$type = (string) ( $node['type'] ?? 'UNKNOWN' );
 			$children = isset( $node['children'] ) && is_array( $node['children'] ) ? $node['children'] : array();
+			foreach ( array_merge( (array) ( $node['fills'] ?? array() ), (array) ( $node['strokes'] ?? array() ) ) as $paint ) {
+				$color = is_array( $paint ) ? self::paint_color( $paint ) : null;
+				if ( $color ) {
+					$colors[ $color ] = ( $colors[ $color ] ?? 0 ) + 1;
+				}
+			}
 			if ( 'TEXT' === $type ) {
 				$stats['text']++;
+				$style = is_array( $node['style'] ?? null ) ? $node['style'] : array();
+				if ( ! empty( $style['fontFamily'] ) ) {
+					$key = implode( '|', array( $style['fontFamily'], $style['fontWeight'] ?? '', $style['fontSize'] ?? '' ) );
+					$typography[ $key ] = array( 'font' => sanitize_text_field( (string) $style['fontFamily'] ), 'weight' => absint( $style['fontWeight'] ?? 400 ), 'size' => (float) ( $style['fontSize'] ?? 0 ), 'occurrences' => ( $typography[ $key ]['occurrences'] ?? 0 ) + 1 );
+				}
 			} elseif ( $children || in_array( $type, array( 'FRAME', 'GROUP', 'SECTION', 'COMPONENT', 'INSTANCE' ), true ) ) {
 				$stats['containers']++;
 				if ( in_array( $type, array( 'COMPONENT', 'INSTANCE' ), true ) ) {
 					$stats['components']++;
+					$key = $type . '|' . (string) ( $node['name'] ?? $type );
+					$components[ $key ] = array( 'name' => sanitize_text_field( (string) ( $node['name'] ?? $type ) ), 'type' => $type, 'occurrences' => ( $components[ $key ]['occurrences'] ?? 0 ) + 1 );
 				}
 				if ( in_array( $node['layoutMode'] ?? 'NONE', array( 'HORIZONTAL', 'VERTICAL' ), true ) ) {
 					$stats['auto_layout']++;
@@ -112,12 +128,24 @@ final class Elementor_MCP_Figma_Analyzer {
 		if ( $unsupported ) {
 			$warnings[] = sprintf( 'Unsupported Figma layer types: %s.', implode( ', ', array_slice( array_keys( $unsupported ), 0, 5 ) ) );
 		}
+		arsort( $colors );
+		usort( $typography, static function ( array $left, array $right ): int { return $right['occurrences'] <=> $left['occurrences']; } );
+		usort( $components, static function ( array $left, array $right ): int { return $right['occurrences'] <=> $left['occurrences']; } );
 
 		return array(
 			'source' => array( 'url' => $reference['url'], 'file_key' => $reference['file_key'], 'node_id' => $reference['node_id'], 'name' => sanitize_text_field( (string) ( $root['name'] ?? 'Figma frame' ) ) ),
 			'stats' => $stats,
+			'styles' => array( 'colors' => array_slice( array_map( static function ( $value, $occurrences ): array { return array( 'value' => $value, 'occurrences' => $occurrences ); }, array_keys( $colors ), array_values( $colors ) ), 0, 8 ), 'typography' => array_slice( $typography, 0, 6 ), 'components' => array_slice( $components, 0, 6 ) ),
 			'warnings' => $warnings,
 		);
+	}
+
+	private static function paint_color( array $paint ): ?string {
+		if ( 'SOLID' !== ( $paint['type'] ?? '' ) || false === ( $paint['visible'] ?? true ) || ! is_array( $paint['color'] ?? null ) ) {
+			return null;
+		}
+		$channels = array_map( static function ( string $channel ) use ( $paint ): int { return max( 0, min( 255, (int) round( 255 * (float) ( $paint['color'][ $channel ] ?? 0 ) ) ) ); }, array( 'r', 'g', 'b' ) );
+		return sprintf( '#%02x%02x%02x', $channels[0], $channels[1], $channels[2] );
 	}
 
 	private static function has_image_fill( array $node ): bool {

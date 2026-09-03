@@ -203,6 +203,10 @@ final class Elementor_MCP_Admin {
 			<?php if ( $warnings ) : ?>
 				<ul><?php foreach ( $warnings as $warning ) : ?><li><?php echo esc_html( $warning ); ?></li><?php endforeach; ?></ul>
 			<?php endif; ?>
+			<?php $styles = is_array( $preview['styles'] ?? null ) ? $preview['styles'] : array(); ?>
+			<?php if ( ! empty( $styles['colors'] ) ) : ?><p><strong><?php esc_html_e( 'Figma colors:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $color ): string { return $color['value'] . ' (' . absint( $color['occurrences'] ) . ')'; }, $styles['colors'] ) ) ); ?></p><?php endif; ?>
+			<?php if ( ! empty( $styles['typography'] ) ) : ?><p><strong><?php esc_html_e( 'Typography:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $style ): string { return $style['font'] . ' ' . absint( $style['weight'] ) . ' ' . $style['size'] . 'px'; }, $styles['typography'] ) ) ); ?></p><?php endif; ?>
+			<?php if ( ! empty( $styles['components'] ) ) : ?><p><strong><?php esc_html_e( 'Repeated components:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $component ): string { return $component['name'] . ' (' . absint( $component['occurrences'] ) . ')'; }, $styles['components'] ) ) ); ?></p><?php endif; ?>
 		</div>
 		<?php
 	}
