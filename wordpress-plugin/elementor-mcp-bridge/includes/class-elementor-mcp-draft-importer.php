@@ -70,8 +70,8 @@ final class Elementor_MCP_Draft_Importer {
 			$content = $heading ? array( 'title' => $node['characters'] ?? '', 'title_color' => self::color( $node['fills'] ?? array() ) ) : array( 'editor' => $node['characters'] ?? '', 'text_color' => self::color( $node['fills'] ?? array() ) );
 			return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'widget', 'widgetType' => $heading ? 'heading' : 'text-editor', 'settings' => array_merge( self::navigator_title( $node ), self::visual( $node ), $positioning, $content, array( 'align' => self::text_alignment( $style['textAlignHorizontal'] ?? 'LEFT' ), 'typography_typography' => 'custom', 'typography_font_family' => $style['fontFamily'] ?? '', 'typography_font_weight' => (string) ( $style['fontWeight'] ?? 400 ), 'typography_font_size' => self::size( $size ), 'typography_line_height' => self::size( $style['lineHeightPx'] ?? null ), 'typography_letter_spacing' => self::size( $style['letterSpacing'] ?? null ) ) ), 'elements' => array() );
 		}
-		if ( self::is_simple_button( $node ) ) {
-			return self::button_widget( $node, $parent, $is_root );
+		if ( self::button_parts( $node ) ) {
+			return self::button_widget( $node, $parent, $is_root, $assets );
 		}
 		$children = array(); foreach ( (array) ( $node['children'] ?? array() ) as $child ) { if ( is_array( $child ) && ( $element = self::convert_node( $child, $node, false, $assets ) ) ) $children[] = $element; }
 		$justify = array( 'MIN' => 'flex-start', 'CENTER' => 'center', 'MAX' => 'flex-end', 'SPACE_BETWEEN' => 'space-between' ); $align = array( 'MIN' => 'flex-start', 'CENTER' => 'center', 'MAX' => 'flex-end', 'BASELINE' => 'baseline' );
@@ -85,16 +85,41 @@ final class Elementor_MCP_Draft_Importer {
 		$native_alignment = $space_between ? array( 'direction' => 'row', 'justify_content' => 'space-between' ) : array();
 		return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'container', 'isInner' => true, 'settings' => array_merge( self::navigator_title( $node ), self::visual( $node ), $positioning, array( 'content_width' => 'full', 'flex_direction' => 'HORIZONTAL' === $layout_mode ? 'row' : 'column', 'flex_justify_content' => $justify[ $node['primaryAxisAlignItems'] ?? '' ] ?? 'flex-start', 'flex_align_items' => $align[ $node['counterAxisAlignItems'] ?? '' ] ?? 'stretch', 'flex_gap' => isset( $node['itemSpacing'] ) ? array( 'column' => (string) $node['itemSpacing'], 'row' => (string) $node['itemSpacing'], 'isLinked' => true, 'unit' => 'px', 'size' => (float) $node['itemSpacing'] ) : null, 'padding' => self::box( $node['paddingTop'] ?? 0, $node['paddingRight'] ?? 0, $node['paddingBottom'] ?? 0, $node['paddingLeft'] ?? 0 ), 'width' => $width, 'min_height' => $height ), $native_alignment ), 'elements' => $children );
 	}
-	/** Use a native Button only when the component has one unambiguous text label. */
-	private static function is_simple_button( array $node ): bool {
+	/** Use a native Button only when its label and optional icon are unambiguous. */
+	private static function button_parts( array $node ): ?array {
 		$recognition = Elementor_MCP_Layout_Model::recognition_for( $node );
-		$children = array_values( array_filter( (array) ( $node['children'] ?? array() ), 'is_array' ) );
-		return 'button' === ( $recognition['type'] ?? '' ) && (float) ( $recognition['confidence'] ?? 0 ) >= 0.9 && 1 === count( $children ) && 'TEXT' === ( $children[0]['type'] ?? '' ) && '' !== trim( (string) ( $children[0]['characters'] ?? '' ) );
+		if ( 'button' !== ( $recognition['type'] ?? '' ) || (float) ( $recognition['confidence'] ?? 0 ) < 0.9 ) {
+			return null;
+		}
+		$text = null;
+		$icon = null;
+		foreach ( (array) ( $node['children'] ?? array() ) as $child ) {
+			if ( ! is_array( $child ) || false === ( $child['visible'] ?? true ) ) {
+				continue;
+			}
+			if ( 'TEXT' === ( $child['type'] ?? '' ) && ! $text ) {
+				$text = $child;
+				continue;
+			}
+			if ( self::is_vector_node( $child ) && ! $icon ) {
+				$icon = $child;
+				continue;
+			}
+			return null;
+		}
+		return $text && '' !== trim( (string) ( $text['characters'] ?? '' ) ) ? array( 'text' => $text, 'icon' => $icon ) : null;
 	}
 
-	private static function button_widget( array $node, ?array $parent, bool $is_root ): array {
-		$label = (array) $node['children'][0];
+	private static function button_widget( array $node, ?array $parent, bool $is_root, array $assets ): array {
+		$parts = self::button_parts( $node );
+		$label = (array) $parts['text'];
 		$style = (array) ( $label['style'] ?? array() );
+		$text = sanitize_text_field( (string) ( $label['characters'] ?? '' ) );
+		$icon = self::button_icon( $parts['icon'], $assets, (float) ( $node['itemSpacing'] ?? 0 ) );
+		if ( ! $icon && preg_match( '/^\+\s+(.+)$/u', $text, $matches ) ) {
+			$text = sanitize_text_field( $matches[1] );
+			$icon = array( 'selected_icon' => array( 'value' => 'fas fa-plus', 'library' => 'fa-solid' ), 'icon_align' => 'row', 'icon_indent' => self::size( 6 ) );
+		}
 		return array(
 			'id'         => self::id( $node['id'] ?? wp_generate_uuid4() ),
 			'elType'     => 'widget',
@@ -103,7 +128,7 @@ final class Elementor_MCP_Draft_Importer {
 				self::navigator_title( $node ),
 				self::positioning( $node, $parent, $is_root, true ),
 				array(
-					'text'                      => sanitize_text_field( (string) ( $label['characters'] ?? '' ) ),
+					'text'                      => $text,
 					'align'                     => self::text_alignment( (string) ( $style['textAlignHorizontal'] ?? 'CENTER' ) ),
 					'button_text_color'         => self::color( (array) ( $label['fills'] ?? array() ) ),
 					'background_background'     => 'classic',
@@ -116,10 +141,23 @@ final class Elementor_MCP_Draft_Importer {
 					'typography_font_size'      => self::size( $style['fontSize'] ?? null ),
 					'typography_line_height'    => self::size( $style['lineHeightPx'] ?? null ),
 					'typography_letter_spacing' => self::size( $style['letterSpacing'] ?? null ),
-				)
+				),
+				$icon
 			),
 			'elements'   => array(),
 		);
+	}
+
+	private static function button_icon( ?array $icon, array $assets, float $gap ): array {
+		if ( ! $icon || empty( $icon['id'] ) || empty( $assets[ (string) $icon['id'] ] ) ) {
+			return array();
+		}
+		$attachment_id = (int) $assets[ (string) $icon['id'] ];
+		$url = wp_get_attachment_url( $attachment_id );
+		if ( ! $url ) {
+			return array();
+		}
+		return array( 'selected_icon' => array( 'value' => array( 'id' => $attachment_id, 'url' => $url ), 'library' => 'svg' ), 'icon_align' => 'row', 'icon_indent' => self::size( max( 0, $gap ) ) );
 	}
 	private static function positioning( array $node, ?array $parent, bool $is_root, bool $is_widget = false ): array {
 		if ( $is_root || ! $parent ) return array();
