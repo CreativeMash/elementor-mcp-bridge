@@ -131,11 +131,7 @@ final class Elementor_MCP_Layout_Model {
 		if ( ! in_array( $node['type'] ?? '', array( 'COMPONENT', 'INSTANCE' ), true ) ) {
 			return array();
 		}
-		$name = strtolower( trim( explode( '/', (string) ( $node['name'] ?? '' ) )[0] ) );
-		if ( preg_match( '/\\bbutton\\b/', $name ) ) {
-			return array( 'type' => 'button', 'confidence' => 0.98, 'source' => 'component-name' );
-		}
-		return array();
+		return Elementor_MCP_Component_Recipes::recipe_for( $node );
 	}
 
 	private static function bounds( array $node ): ?array {

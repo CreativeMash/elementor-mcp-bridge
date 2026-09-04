@@ -53,6 +53,9 @@ final class Elementor_MCP_Admin {
 			.elementor-mcp-preview { background: #f8fafc; border: 1px solid #d8dee9; border-radius: 10px; margin-top: 14px; padding: 12px; }
 			.elementor-mcp-preview h3 { font-size: 14px; margin: 0 0 8px; }
 			.elementor-mcp-preview p, .elementor-mcp-preview ul { font-size: 13px; margin: 8px 0; }
+			.elementor-mcp-recipe-list { display: grid; gap: 8px; margin-top: 12px; }
+			.elementor-mcp-recipe-row { align-items: center; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) 180px; }
+			.elementor-mcp-recipe-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.elementor-mcp-conversion-plan { margin: 12px 0 0; }
 			.elementor-mcp-conversion-plan li { margin: 4px 0; }
 			@media (max-width: 782px) { .elementor-mcp-grid { grid-template-columns: 1fr; } .elementor-mcp-hero { padding: 28px; } }
@@ -203,7 +206,7 @@ final class Elementor_MCP_Admin {
 			<h3><?php echo esc_html( sprintf( __( 'Preview: %s', 'elementor-mcp-bridge' ), $source['name'] ?? __( 'Figma frame', 'elementor-mcp-bridge' ) ) ); ?></h3>
 			<p><?php echo esc_html( sprintf( __( '%1$d containers, %2$d text layers, %3$d image/vector layers, %4$d components.', 'elementor-mcp-bridge' ), absint( $stats['containers'] ?? 0 ), absint( $stats['text'] ?? 0 ), absint( $stats['images'] ?? 0 ), absint( $stats['components'] ?? 0 ) ) ); ?></p>
 			<?php if ( $layout_model ) : ?><p><strong><?php echo esc_html( sprintf( __( 'Layout model v%s:', 'elementor-mcp-bridge' ), $layout_model['version'] ?? '1' ) ); ?></strong> <?php echo esc_html( sprintf( __( '%1$d native-flow containers and %2$d coordinate fallbacks.', 'elementor-mcp-bridge' ), absint( $layout_model['native_flow'] ?? 0 ), absint( $layout_model['coordinate_fallback'] ?? 0 ) ) ); ?></p><?php endif; ?>
-			<?php if ( ! empty( $layout_model['high_confidence_components'] ) ) : ?><p><?php echo esc_html( sprintf( _n( '%d high-confidence component will use a native Elementor widget when its recipe is supported.', '%d high-confidence components will use native Elementor widgets when their recipes are supported.', absint( $layout_model['high_confidence_components'] ), 'elementor-mcp-bridge' ), absint( $layout_model['high_confidence_components'] ) ) ); ?></p><?php endif; ?>
+			<?php if ( ! empty( $layout_model['high_confidence_components'] ) ) : ?><p><?php echo esc_html( sprintf( _n( '%d high-confidence component will use a supported Elementor recipe.', '%d high-confidence components will use supported Elementor recipes.', absint( $layout_model['high_confidence_components'] ), 'elementor-mcp-bridge' ), absint( $layout_model['high_confidence_components'] ) ) ); ?></p><?php endif; ?>
 			<?php if ( $warnings ) : ?>
 				<ul><?php foreach ( $warnings as $warning ) : ?><li><?php echo esc_html( $warning ); ?></li><?php endforeach; ?></ul>
 			<?php endif; ?>
@@ -211,6 +214,7 @@ final class Elementor_MCP_Admin {
 			<?php if ( ! empty( $styles['colors'] ) ) : ?><p><strong><?php esc_html_e( 'Figma colors:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $color ): string { return $color['value'] . ' (' . absint( $color['occurrences'] ) . ')'; }, $styles['colors'] ) ) ); ?></p><?php endif; ?>
 			<?php if ( ! empty( $styles['typography'] ) ) : ?><p><strong><?php esc_html_e( 'Typography:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $style ): string { return $style['font'] . ' ' . absint( $style['weight'] ) . ' ' . $style['size'] . 'px'; }, $styles['typography'] ) ) ); ?></p><?php endif; ?>
 			<?php if ( ! empty( $styles['components'] ) ) : ?><p><strong><?php esc_html_e( 'Figma components:', 'elementor-mcp-bridge' ); ?></strong> <?php echo esc_html( implode( ', ', array_map( static function ( array $component ): string { return $component['name'] . ' (' . absint( $component['occurrences'] ) . ')'; }, $styles['components'] ) ) ); ?></p><?php endif; ?>
+			<?php self::component_recipes( $styles['components'] ?? array() ); ?>
 			<p><strong><?php esc_html_e( 'Conversion plan:', 'elementor-mcp-bridge' ); ?></strong></p>
 			<ul class="elementor-mcp-conversion-plan">
 				<li><?php esc_html_e( 'Frames and groups become editable Elementor containers.', 'elementor-mcp-bridge' ); ?></li>
@@ -220,6 +224,26 @@ final class Elementor_MCP_Admin {
 				<?php if ( ! empty( $stats['variable_bindings'] ) ) : ?><li><?php echo esc_html( sprintf( _n( '%d Figma variable binding was detected. Global Elementor styles will not be changed.', '%d Figma variable bindings were detected. Global Elementor styles will not be changed.', absint( $stats['variable_bindings'] ), 'elementor-mcp-bridge' ), absint( $stats['variable_bindings'] ) ) ); ?></li><?php endif; ?>
 			</ul>
 		</div>
+		<?php
+	}
+
+	private static function component_recipes( array $components ): void {
+		if ( ! $components ) {
+			return;
+		}
+		$choices = Elementor_MCP_Component_Recipes::choices();
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="elementor_mcp_save_component_recipes">
+			<?php wp_nonce_field( 'elementor_mcp_save_component_recipes' ); ?>
+			<p><strong><?php esc_html_e( 'Component recipes for this site', 'elementor-mcp-bridge' ); ?></strong><br><?php esc_html_e( 'These choices are saved only in this WordPress site and apply to future imports.', 'elementor-mcp-bridge' ); ?></p>
+			<div class="elementor-mcp-recipe-list">
+				<?php foreach ( $components as $component ) : $name = sanitize_text_field( (string) ( $component['name'] ?? '' ) ); $key = sanitize_title( trim( explode( '/', $name )[0] ) ); if ( ! $name || ! $key ) { continue; } ?>
+					<label class="elementor-mcp-recipe-row"><code><?php echo esc_html( $name ); ?></code><select name="recipes[<?php echo esc_attr( $key ); ?>]"><?php foreach ( $choices as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( Elementor_MCP_Component_Recipes::selection_for( $name ), $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?></select></label>
+				<?php endforeach; ?>
+			</div>
+			<p><button type="submit" class="button button-secondary"><?php esc_html_e( 'Save component recipes', 'elementor-mcp-bridge' ); ?></button></p>
+		</form>
 		<?php
 	}
 
@@ -243,6 +267,7 @@ final class Elementor_MCP_Admin {
 			'analysis-failed'                 => array( 'error', __( 'The Figma frame could not be analyzed. Check the selected frame URL and ensure it is shared with the connected Figma user.', 'elementor-mcp-bridge' ) ),
 			'draft-created'                   => array( 'success', __( 'A new Elementor draft was created. It has not been published.', 'elementor-mcp-bridge' ) ),
 			'draft-failed'                    => array( 'error', __( 'The draft could not be created. Analyze the frame again and confirm draft creation.', 'elementor-mcp-bridge' ) ),
+			'recipes-saved'                   => array( 'success', __( 'Component recipes were saved for this WordPress site. Future imports will use them.', 'elementor-mcp-bridge' ) ),
 		);
 		if ( ! isset( $messages[ $notice ] ) ) {
 			return;

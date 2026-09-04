@@ -36,3 +36,7 @@ Each Figma node records:
 2. Validate model output against real imports and visual comparisons.
 3. Introduce renderer recipes one at a time, beginning with high-confidence components.
 4. Keep coordinate fallback for ambiguous layouts and make any manual refinement visible in the import plan.
+
+## Site Recipes
+
+Component recipes are resolved by Figma component name. Built-in recipes are safe defaults; a WordPress administrator can save a site-level mapping from the import preview for future imports. These mappings are local to one WordPress installation, so one site's design system never changes another site's conversion.
