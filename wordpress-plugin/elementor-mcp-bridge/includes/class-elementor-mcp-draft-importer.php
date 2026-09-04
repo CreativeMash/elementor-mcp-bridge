@@ -18,7 +18,7 @@ final class Elementor_MCP_Draft_Importer {
 		if ( ! $content ) { self::redirect( 'draft-failed' ); }
 		update_post_meta( $id, '_elementor_edit_mode', 'builder' ); update_post_meta( $id, '_elementor_template_type', 'wp-page' ); update_post_meta( $id, '_elementor_version', ELEMENTOR_VERSION );
 		update_post_meta( $id, '_elementor_data', wp_slash( wp_json_encode( array( self::convert_node( $preview['document'], null, true, $assets ) ) ) ) );
-		update_post_meta( $id, '_elementor_mcp_responsive_css', self::responsive_css( $preview['document'], (int) $id ) );
+		update_post_meta( $id, '_elementor_mcp_responsive_css', self::responsive_css( $preview['document'], (int) $id ) . self::button_no_wrap_css( $preview['document'], (int) $id ) );
 		update_post_meta( $id, '_wp_page_template', 'elementor_canvas' ); clean_post_cache( $id );
 		self::redirect( 'draft-created', array( 'draft_id' => $id ) );
 	}
@@ -55,6 +55,24 @@ final class Elementor_MCP_Draft_Importer {
 	}
 	private static function responsive_shell( array $node ): ?array { $box = (array) ( $node['absoluteBoundingBox'] ?? array() ); if ( ! empty( $node['children'] ) && (float) ( $box['width'] ?? 0 ) >= 640 && (float) ( $box['height'] ?? 0 ) >= 300 ) return $node; foreach ( (array) ( $node['children'] ?? array() ) as $child ) if ( is_array( $child ) && ( $shell = self::responsive_shell( $child ) ) ) return $shell; return null; }
 	private static function responsive_nodes( array $node, array &$spacers, array &$rows, array &$fixed_items ): void { $children = (array) ( $node['children'] ?? array() ); $name = (string) ( $node['name'] ?? '' ); if ( ! $children && preg_match( '/\\bspacer\\b/i', $name ) ) $spacers[] = $node; if ( preg_match( '/(?:grid|tiles|cards)/i', $name ) ) foreach ( $children as $child ) if ( is_array( $child ) && 'HORIZONTAL' === ( $child['layoutMode'] ?? '' ) && count( (array) ( $child['children'] ?? array() ) ) > 1 ) $rows[] = $child; $box = (array) ( $node['absoluteBoundingBox'] ?? array() ); if ( 'INSTANCE' === ( $node['type'] ?? '' ) && (float) ( $box['width'] ?? 0 ) <= 64 && (float) ( $box['height'] ?? 0 ) <= 64 ) $fixed_items[] = $node; foreach ( $children as $child ) if ( is_array( $child ) ) self::responsive_nodes( $child, $spacers, $rows, $fixed_items ); }
+	/** Preserve single-line labels where Figma flattened a leading icon into text. */
+	private static function button_no_wrap_css( array $node, int $post_id ): string {
+		$selectors = array();
+		$walk = static function ( array $candidate ) use ( &$walk, &$selectors, $post_id ): void {
+			$parts = self::button_parts( $candidate );
+			$label = is_array( $parts['text'] ?? null ) ? (string) ( $parts['text']['characters'] ?? '' ) : '';
+			if ( $label && preg_match( '/^\\+\\s+.+$/u', $label ) && ! empty( $candidate['id'] ) ) {
+				$selectors[] = '.elementor-' . $post_id . ' .elementor-element-' . self::id( (string) $candidate['id'] ) . ' .elementor-button';
+			}
+			foreach ( (array) ( $candidate['children'] ?? array() ) as $child ) {
+				if ( is_array( $child ) ) {
+					$walk( $child );
+				}
+			}
+		};
+		$walk( $node );
+		return $selectors ? implode( ',', $selectors ) . '{white-space:nowrap;}' : '';
+	}
 	/**
 	 * Auto Layout maps to Elementor flexbox. A Figma parent without Auto Layout
 	 * retains its desktop coordinates using Elementor's native absolute controls.
@@ -118,7 +136,7 @@ final class Elementor_MCP_Draft_Importer {
 		$icon = self::button_icon( $parts['icon'], $assets, (float) ( $node['itemSpacing'] ?? 0 ) );
 		if ( ! $icon && preg_match( '/^\+\s+(.+)$/u', $text, $matches ) ) {
 			$text = sanitize_text_field( $matches[1] );
-			$icon = array( 'selected_icon' => array( 'value' => 'fas fa-plus', 'library' => 'fa-solid' ), 'icon_align' => 'row', 'icon_indent' => self::size( 6 ) );
+			$icon = array( 'selected_icon' => array( 'value' => 'fas fa-plus', 'library' => 'fa-solid' ), 'icon_align' => 'row', 'icon_indent' => self::size( 0 ) );
 		}
 		return array(
 			'id'         => self::id( $node['id'] ?? wp_generate_uuid4() ),
