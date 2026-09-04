@@ -197,10 +197,12 @@ final class Elementor_MCP_Admin {
 		$source = is_array( $preview['source'] ?? null ) ? $preview['source'] : array();
 		$stats = is_array( $preview['stats'] ?? null ) ? $preview['stats'] : array();
 		$warnings = is_array( $preview['warnings'] ?? null ) ? $preview['warnings'] : array();
+		$layout_model = is_array( $preview['layout_model'] ?? null ) ? $preview['layout_model'] : array();
 		?>
 		<div class="elementor-mcp-preview">
 			<h3><?php echo esc_html( sprintf( __( 'Preview: %s', 'elementor-mcp-bridge' ), $source['name'] ?? __( 'Figma frame', 'elementor-mcp-bridge' ) ) ); ?></h3>
 			<p><?php echo esc_html( sprintf( __( '%1$d containers, %2$d text layers, %3$d image/vector layers, %4$d components.', 'elementor-mcp-bridge' ), absint( $stats['containers'] ?? 0 ), absint( $stats['text'] ?? 0 ), absint( $stats['images'] ?? 0 ), absint( $stats['components'] ?? 0 ) ) ); ?></p>
+			<?php if ( $layout_model ) : ?><p><strong><?php echo esc_html( sprintf( __( 'Layout model v%s:', 'elementor-mcp-bridge' ), $layout_model['version'] ?? '1' ) ); ?></strong> <?php echo esc_html( sprintf( __( '%1$d native-flow containers and %2$d coordinate fallbacks.', 'elementor-mcp-bridge' ), absint( $layout_model['native_flow'] ?? 0 ), absint( $layout_model['coordinate_fallback'] ?? 0 ) ) ); ?></p><?php endif; ?>
 			<?php if ( $warnings ) : ?>
 				<ul><?php foreach ( $warnings as $warning ) : ?><li><?php echo esc_html( $warning ); ?></li><?php endforeach; ?></ul>
 			<?php endif; ?>

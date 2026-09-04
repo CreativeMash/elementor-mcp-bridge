@@ -137,6 +137,7 @@ final class Elementor_MCP_Figma_Analyzer {
 			'source' => array( 'url' => $reference['url'], 'file_key' => $reference['file_key'], 'node_id' => $reference['node_id'], 'name' => sanitize_text_field( (string) ( $root['name'] ?? 'Figma frame' ) ) ),
 			'document' => $root,
 			'stats' => $stats,
+			'layout_model' => Elementor_MCP_Layout_Model::summary( $root ),
 			'styles' => array( 'colors' => array_slice( array_map( static function ( $value, $occurrences ): array { return array( 'value' => $value, 'occurrences' => $occurrences ); }, array_keys( $colors ), array_values( $colors ) ), 0, 8 ), 'typography' => array_slice( $typography, 0, 6 ), 'components' => array_slice( $components, 0, 6 ) ),
 			'warnings' => $warnings,
 		);
