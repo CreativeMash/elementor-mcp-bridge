@@ -26,7 +26,7 @@ Each Figma node records:
 ## Safety Rules
 
 - Auto Layout is preferred, but non-Auto Layout layers are not silently guessed as responsive flow.
-- Component recognition is deliberately conservative. Version 1 recognizes a component named `Button` as a future button-widget candidate; all other components remain editable structures.
+- Component recognition is deliberately conservative. Version 1 recognizes a simple component named `Button`, containing one text label, as an Elementor Button widget. All other components remain editable structures.
 - Analysis never writes WordPress content, Elementor data, global styles, or Figma.
 - The preview stores only a compact model summary. The Figma document remains the canonical source for the current import session.
 

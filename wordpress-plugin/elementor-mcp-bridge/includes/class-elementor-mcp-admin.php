@@ -203,6 +203,7 @@ final class Elementor_MCP_Admin {
 			<h3><?php echo esc_html( sprintf( __( 'Preview: %s', 'elementor-mcp-bridge' ), $source['name'] ?? __( 'Figma frame', 'elementor-mcp-bridge' ) ) ); ?></h3>
 			<p><?php echo esc_html( sprintf( __( '%1$d containers, %2$d text layers, %3$d image/vector layers, %4$d components.', 'elementor-mcp-bridge' ), absint( $stats['containers'] ?? 0 ), absint( $stats['text'] ?? 0 ), absint( $stats['images'] ?? 0 ), absint( $stats['components'] ?? 0 ) ) ); ?></p>
 			<?php if ( $layout_model ) : ?><p><strong><?php echo esc_html( sprintf( __( 'Layout model v%s:', 'elementor-mcp-bridge' ), $layout_model['version'] ?? '1' ) ); ?></strong> <?php echo esc_html( sprintf( __( '%1$d native-flow containers and %2$d coordinate fallbacks.', 'elementor-mcp-bridge' ), absint( $layout_model['native_flow'] ?? 0 ), absint( $layout_model['coordinate_fallback'] ?? 0 ) ) ); ?></p><?php endif; ?>
+			<?php if ( ! empty( $layout_model['high_confidence_components'] ) ) : ?><p><?php echo esc_html( sprintf( _n( '%d high-confidence component will use a native Elementor widget when its recipe is supported.', '%d high-confidence components will use native Elementor widgets when their recipes are supported.', absint( $layout_model['high_confidence_components'] ), 'elementor-mcp-bridge' ), absint( $layout_model['high_confidence_components'] ) ) ); ?></p><?php endif; ?>
 			<?php if ( $warnings ) : ?>
 				<ul><?php foreach ( $warnings as $warning ) : ?><li><?php echo esc_html( $warning ); ?></li><?php endforeach; ?></ul>
 			<?php endif; ?>

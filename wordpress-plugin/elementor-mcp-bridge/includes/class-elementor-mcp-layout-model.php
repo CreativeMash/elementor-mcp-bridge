@@ -39,7 +39,7 @@ final class Elementor_MCP_Layout_Model {
 			'kind'        => $kind,
 			'content'     => 'text' === $kind ? sanitize_textarea_field( (string) ( $node['characters'] ?? '' ) ) : '',
 			'layout'       => self::layout( $node, $children ),
-			'recognition' => self::recognition( $node ),
+			'recognition' => self::recognition_for( $node ),
 			'children'     => $children,
 		);
 	}
@@ -126,7 +126,8 @@ final class Elementor_MCP_Layout_Model {
 		return is_numeric( $size ) ? 'fixed' : null;
 	}
 
-	private static function recognition( array $node ): array {
+	/** Return a conservative component recipe candidate for a Figma node. */
+	public static function recognition_for( array $node ): array {
 		if ( ! in_array( $node['type'] ?? '', array( 'COMPONENT', 'INSTANCE' ), true ) ) {
 			return array();
 		}
