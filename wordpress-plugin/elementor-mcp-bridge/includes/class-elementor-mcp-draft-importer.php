@@ -67,7 +67,8 @@ final class Elementor_MCP_Draft_Importer {
 		if ( isset( $assets[ $node_id ] ) && self::is_asset_node( $node ) ) return self::image_widget( $node, $parent, $is_root, (int) $assets[ $node_id ] );
 		if ( 'TEXT' === ( $node['type'] ?? '' ) ) {
 			$style = (array) ( $node['style'] ?? array() ); $size = (float) ( $style['fontSize'] ?? 16 ); $heading = $size >= 24;
-			return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'widget', 'widgetType' => $heading ? 'heading' : 'text-editor', 'settings' => array_merge( self::navigator_title( $node ), self::visual( $node ), $positioning, array( $heading ? 'title' : 'editor' => $node['characters'] ?? '', 'text_color' => self::color( $node['fills'] ?? array() ), 'align' => self::text_alignment( $style['textAlignHorizontal'] ?? 'LEFT' ), 'typography_typography' => 'custom', 'typography_font_family' => $style['fontFamily'] ?? '', 'typography_font_weight' => (string) ( $style['fontWeight'] ?? 400 ), 'typography_font_size' => self::size( $size ), 'typography_line_height' => self::size( $style['lineHeightPx'] ?? null ), 'typography_letter_spacing' => self::size( $style['letterSpacing'] ?? null ) ) ), 'elements' => array() );
+			$content = $heading ? array( 'title' => $node['characters'] ?? '', 'title_color' => self::color( $node['fills'] ?? array() ) ) : array( 'editor' => $node['characters'] ?? '', 'text_color' => self::color( $node['fills'] ?? array() ) );
+			return array( 'id' => self::id( $node['id'] ?? wp_generate_uuid4() ), 'elType' => 'widget', 'widgetType' => $heading ? 'heading' : 'text-editor', 'settings' => array_merge( self::navigator_title( $node ), self::visual( $node ), $positioning, $content, array( 'align' => self::text_alignment( $style['textAlignHorizontal'] ?? 'LEFT' ), 'typography_typography' => 'custom', 'typography_font_family' => $style['fontFamily'] ?? '', 'typography_font_weight' => (string) ( $style['fontWeight'] ?? 400 ), 'typography_font_size' => self::size( $size ), 'typography_line_height' => self::size( $style['lineHeightPx'] ?? null ), 'typography_letter_spacing' => self::size( $style['letterSpacing'] ?? null ) ) ), 'elements' => array() );
 		}
 		if ( self::is_simple_button( $node ) ) {
 			return self::button_widget( $node, $parent, $is_root );
@@ -105,8 +106,10 @@ final class Elementor_MCP_Draft_Importer {
 					'text'                      => sanitize_text_field( (string) ( $label['characters'] ?? '' ) ),
 					'align'                     => self::text_alignment( (string) ( $style['textAlignHorizontal'] ?? 'CENTER' ) ),
 					'button_text_color'         => self::color( (array) ( $label['fills'] ?? array() ) ),
-					'button_background_color'   => self::color( (array) ( $node['fills'] ?? array() ) ),
+					'background_background'     => 'classic',
+					'background_color'          => self::color( (array) ( $node['fills'] ?? array() ) ),
 					'border_radius'             => self::box( $node['cornerRadius'] ?? ( $node['rectangleCornerRadii'][0] ?? 0 ) ),
+					'text_padding'              => self::box( $node['paddingTop'] ?? 0, $node['paddingRight'] ?? 0, $node['paddingBottom'] ?? 0, $node['paddingLeft'] ?? 0 ),
 					'typography_typography'     => 'custom',
 					'typography_font_family'    => $style['fontFamily'] ?? '',
 					'typography_font_weight'    => (string) ( $style['fontWeight'] ?? 400 ),
