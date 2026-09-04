@@ -22,6 +22,17 @@ final class Elementor_MCP_Bridge {
 
 	public static function init(): void {
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
+		add_action( 'wp_head', array( __CLASS__, 'render_import_responsive_css' ), 99 );
+	}
+
+	/** Print only importer-generated, page-scoped responsive rules on imported drafts. */
+	public static function render_import_responsive_css(): void {
+		if ( is_admin() || ! is_singular( 'page' ) ) return;
+		$css = get_post_meta( get_queried_object_id(), '_elementor_mcp_responsive_css', true );
+		if ( ! is_string( $css ) || '' === $css || strlen( $css ) > 20000 ) return;
+		$css = preg_replace( '/[^a-zA-Z0-9#._,:;{}()%!@\\-\\s]/', '', $css );
+		if ( ! $css ) return;
+		echo '<style id="elementor-mcp-responsive-css">' . $css . '</style>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	public static function routes(): void {

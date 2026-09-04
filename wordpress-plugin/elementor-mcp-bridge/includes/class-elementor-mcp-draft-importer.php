@@ -18,11 +18,43 @@ final class Elementor_MCP_Draft_Importer {
 		if ( ! $content ) { self::redirect( 'draft-failed' ); }
 		update_post_meta( $id, '_elementor_edit_mode', 'builder' ); update_post_meta( $id, '_elementor_template_type', 'wp-page' ); update_post_meta( $id, '_elementor_version', ELEMENTOR_VERSION );
 		update_post_meta( $id, '_elementor_data', wp_slash( wp_json_encode( array( self::convert_node( $preview['document'], null, true, $assets ) ) ) ) );
+		update_post_meta( $id, '_elementor_mcp_responsive_css', self::responsive_css( $preview['document'], (int) $id ) );
 		update_post_meta( $id, '_wp_page_template', 'elementor_canvas' ); clean_post_cache( $id );
 		self::redirect( 'draft-created', array( 'draft_id' => $id ) );
 	}
 
 	private static function convert( array $node, array $assets ): bool { return null !== self::convert_node( $node, null, true, $assets ); }
+	/**
+	 * Generate a conservative fallback for desktop-only Figma application shells.
+	 * Exact tablet/mobile frames can later replace these rules with Figma-specific values.
+	 */
+	private static function responsive_css( array $document, int $post_id ): string {
+		$shell = self::responsive_shell( $document );
+		if ( ! $shell ) return '';
+		$box = (array) ( $shell['absoluteBoundingBox'] ?? array() );
+		$width = (float) ( $box['width'] ?? 0 ); $height = (float) ( $box['height'] ?? 0 );
+		if ( $width < 640 || $height < 300 ) return '';
+		$header = null; $sidebar = null; $content = null;
+		foreach ( (array) ( $shell['children'] ?? array() ) as $child ) {
+			if ( ! is_array( $child ) || ! ( $child_box = $child['absoluteBoundingBox'] ?? null ) ) continue;
+			$x = (float) ( $child_box['x'] ?? 0 ); $y = (float) ( $child_box['y'] ?? 0 ); $child_width = (float) ( $child_box['width'] ?? 0 ); $child_height = (float) ( $child_box['height'] ?? 0 );
+			if ( ! $header && $y <= (float) ( $box['y'] ?? 0 ) + 12 && $child_width >= $width * 0.7 && $child_height <= 160 ) $header = $child;
+			elseif ( ! $sidebar && $x <= (float) ( $box['x'] ?? 0 ) + 12 && $child_width <= $width * 0.33 && $child_height >= $height * 0.4 ) $sidebar = $child;
+			elseif ( ! $content && $child_width >= $width * 0.4 ) $content = $child;
+		}
+		if ( ! $header || ! $sidebar || ! $content ) return '';
+		$reset = array( $shell, $header, $sidebar, $content );
+		foreach ( (array) ( $sidebar['children'] ?? array() ) as $child ) if ( is_array( $child ) && 'NONE' !== ( $child['layoutMode'] ?? 'NONE' ) ) $reset[] = $child;
+		$spacers = array(); $rows = array(); $fixed_items = array();
+		self::responsive_nodes( $shell, $spacers, $rows, $fixed_items );
+		$selector = static function ( array $node ) use ( $post_id ): string { return '.elementor-' . $post_id . ' .elementor-element-' . self::id( (string) ( $node['id'] ?? '' ) ); };
+		$selectors = static function ( array $nodes ) use ( $selector ): string { return implode( ',', array_map( $selector, $nodes ) ); };
+		$css = '@media (max-width:1024px){' . $selectors( $reset ) . '{--position:relative!important;--width:100%!important;--min-height:initial!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;}' . $selector( $header ) . '{--flex-wrap:wrap!important;}' . ( $spacers ? $selectors( $spacers ) . '{display:none!important;}' : '' ) . '}';
+		$css .= '@media (max-width:767px){' . ( $rows ? $selectors( $rows ) . '{--flex-direction:column!important;--flex-wrap:nowrap!important;}' : '' ) . ( $fixed_items ? $selectors( $fixed_items ) . '{--flex-shrink:0!important;flex-shrink:0!important;}' : '' ) . '}';
+		return $css;
+	}
+	private static function responsive_shell( array $node ): ?array { $box = (array) ( $node['absoluteBoundingBox'] ?? array() ); if ( ! empty( $node['children'] ) && (float) ( $box['width'] ?? 0 ) >= 640 && (float) ( $box['height'] ?? 0 ) >= 300 ) return $node; foreach ( (array) ( $node['children'] ?? array() ) as $child ) if ( is_array( $child ) && ( $shell = self::responsive_shell( $child ) ) ) return $shell; return null; }
+	private static function responsive_nodes( array $node, array &$spacers, array &$rows, array &$fixed_items ): void { $children = (array) ( $node['children'] ?? array() ); $name = (string) ( $node['name'] ?? '' ); if ( ! $children && preg_match( '/\\bspacer\\b/i', $name ) ) $spacers[] = $node; if ( preg_match( '/(?:grid|tiles|cards)/i', $name ) ) foreach ( $children as $child ) if ( is_array( $child ) && 'HORIZONTAL' === ( $child['layoutMode'] ?? '' ) && count( (array) ( $child['children'] ?? array() ) ) > 1 ) $rows[] = $child; $box = (array) ( $node['absoluteBoundingBox'] ?? array() ); if ( 'INSTANCE' === ( $node['type'] ?? '' ) && (float) ( $box['width'] ?? 0 ) <= 64 && (float) ( $box['height'] ?? 0 ) <= 64 ) $fixed_items[] = $node; foreach ( $children as $child ) if ( is_array( $child ) ) self::responsive_nodes( $child, $spacers, $rows, $fixed_items ); }
 	/**
 	 * Auto Layout maps to Elementor flexbox. A Figma parent without Auto Layout
 	 * retains its desktop coordinates using Elementor's native absolute controls.
